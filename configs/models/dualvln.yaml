@@ -5,6 +5,10 @@ policy:
     url: http://127.0.0.1:18103/v1/predict
     reset_url: http://127.0.0.1:18103/v1/reset
     timeout_s: 600
+rollout:
+  # DualVLN predicts a native 32-step trajectory.  Match the upstream action
+  # queue instead of discarding 31 actions and replanning every frame.
+  execution_horizon: null
 output:
   jsonl: eval_results/dualvln.jsonl
 media:
