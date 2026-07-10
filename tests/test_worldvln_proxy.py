@@ -53,6 +53,15 @@ def predict_request(step):
 
 
 class WorldVLNProxyTest(unittest.TestCase):
+    def test_reset_reuses_native_session_to_avoid_stream_accumulation(self):
+        backend = WorldVLNProxyBackend("http://127.0.0.1:1")
+        first = backend.reset("ep-1", "go", "mock")
+        second = backend.reset("ep-2", "turn", "mock")
+        self.assertEqual(first["upstream_session_id"], second["upstream_session_id"])
+        self.assertEqual(backend.episode_id, "ep-2")
+        self.assertEqual(backend.instruction, "turn")
+        self.assertEqual(backend.segment_index, -1)
+
     def test_segment_actions_are_cached_and_units_are_converted(self):
         UpstreamHandler.calls = []
         server = ThreadingHTTPServer(("127.0.0.1", 0), UpstreamHandler)
@@ -66,6 +75,7 @@ class WorldVLNProxyTest(unittest.TestCase):
             third = backend.predict(predict_request(2))
             self.assertEqual(len(UpstreamHandler.calls), 2)
             self.assertEqual(len(UpstreamHandler.calls[0]["images_base64"]), 1)
+            self.assertTrue(UpstreamHandler.calls[0]["reset_session"])
             self.assertEqual(len(UpstreamHandler.calls[1]["images_base64"]), 2)
             self.assertEqual(first["actions"][0][:4], [1.0, 0.0, 0.0, 1.5707963267948966])
             self.assertEqual(second["actions"][0][:4], [0.0, 2.0, 0.0, 0.0])

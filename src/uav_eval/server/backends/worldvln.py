@@ -59,7 +59,12 @@ class WorldVLNProxyBackend(ModelBackend):
     def reset(self, episode_id: str, instruction: str, env_name: str):
         self.episode_id = episode_id
         self.instruction = instruction
-        self.session_id = uuid.uuid4().hex
+        # The native server stores one stream per session id and has no public
+        # delete-session endpoint.  Reusing the id lets reset_session replace
+        # the prior episode state instead of retaining one GPU-heavy stream per
+        # benchmark episode.
+        if self.session_id is None:
+            self.session_id = uuid.uuid4().hex
         self.pending_actions.clear()
         self.pending_frames.clear()
         self.segment_index = -1
