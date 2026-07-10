@@ -37,13 +37,11 @@ class AerialVLABackend(ModelBackend):
         ).parse_aerialvla_action_text
         base = self.ckpt_dir / "openvla-7b"
         lora = self.ckpt_dir / "lora"
-        # Some AerialVLA checkpoints were saved with a tokenizer.json newer
-        # than the tokenizers build in the DLC runtime.  The sentencepiece
-        # tokenizer files remain compatible, so deliberately use the slow
-        # implementation from the complete base checkpoint.  The LoRA export
-        # has tokenizer metadata but does not contain tokenizer.model.
+        # Match the native wrapper: token ids come from the complete base
+        # checkpoint's fast tokenizer.  The LoRA export has an incompatible
+        # tokenizer.json and no tokenizer.model, so it is metadata only.
         self.tokenizer = AutoTokenizer.from_pretrained(
-            base, trust_remote_code=True, use_fast=False
+            base, trust_remote_code=True, use_fast=True
         )
         self.image_processor = AutoImageProcessor.from_pretrained(base, trust_remote_code=True)
         torch_dtype = getattr(torch, dtype)
