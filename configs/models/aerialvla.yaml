@@ -1,0 +1,12 @@
+extends: ../airbrain_http.yaml
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18101/v1/predict
+    reset_url: http://127.0.0.1:18101/v1/reset
+    timeout_s: 180
+output:
+  jsonl: eval_results/aerialvla.jsonl
+media:
+  video_dir: eval_results/videos/aerialvla
+  collision_dir: eval_results/collisions/aerialvla

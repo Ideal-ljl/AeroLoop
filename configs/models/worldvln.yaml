@@ -1,0 +1,12 @@
+extends: ../airbrain_http.yaml
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18104/v1/predict
+    reset_url: http://127.0.0.1:18104/v1/reset
+    timeout_s: 600
+output:
+  jsonl: eval_results/worldvln.jsonl
+media:
+  video_dir: eval_results/videos/worldvln
+  collision_dir: eval_results/collisions/worldvln

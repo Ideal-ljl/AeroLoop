@@ -21,6 +21,7 @@ dev = ["pytest>=7", "ruff>=0.5"]
 
 [project.scripts]
 uav-eval = "uav_eval.cli:main"
+uav-model-server = "uav_eval.server_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

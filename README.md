@@ -228,3 +228,20 @@ observer.close()
 
 `EnvironmentAdapter`, `PolicyAdapter`, and `RolloutObserver` are stable public
 extension points for downstream packages.
+
+## Model HTTP services
+
+UAVEval includes canonical servers for AerialVLA, OpenUAV, DualVLN, and a
+WorldVLN native-service proxy. Install this package into each model's conda
+environment, then use `uav-model-server` or the launch scripts under `scripts/`.
+
+```bash
+uav-model-server --help
+bash scripts/serve_aerialvla.sh
+bash scripts/serve_openuav.sh
+bash scripts/serve_dualvln.sh
+bash scripts/serve_worldvln_proxy.sh
+```
+
+See [docs/MODEL_SERVERS.md](docs/MODEL_SERVERS.md) for checkpoint requirements,
+ports, health checks, native action conversions, and WorldVLN segment caching.
