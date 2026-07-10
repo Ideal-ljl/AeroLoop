@@ -16,13 +16,20 @@ MAX_SAMPLES="${MAX_SAMPLES:-100}"
 EVAL_NAME="${EVAL_NAME:-worldvln_airbrain_${REPO_ID}_$(date +%Y%m%d_%H%M%S)}"
 JOB_NAME="${JOB_NAME:-${REPO_SLUG}-worldvln-$(date +%Y%m%d-%H%M%S)}"
 
+for value in "${REPO_ID}" "${EVAL_NAME}" "${DLC_RUN_AS_USER}"; do
+  if [[ ! "${value}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+    echo "unsafe DLC argument: ${value}" >&2
+    exit 2
+  fi
+done
+
 quote_arg() {
   local value="$1"
   printf "'%s'" "$(printf "%s" "$value" | sed "s/'/'\\''/g")"
 }
 
-worker_command="cd $(quote_arg "${UAVEVAL_ROOT}") && EVAL_NAME=$(quote_arg "${EVAL_NAME}") REPO_ID=$(quote_arg "${REPO_ID}") MAX_SAMPLES=$(quote_arg "${MAX_SAMPLES}") bash $(quote_arg "${UAVEVAL_ROOT}/scripts/worldvln_dlc_worker.sh")"
-command="bash -lc $(quote_arg "set -e; if [[ \$(id -u) == 0 ]]; then if ! id -u ${DLC_RUN_AS_USER} >/dev/null 2>&1; then useradd -m -s /bin/bash ${DLC_RUN_AS_USER}; fi; exec su - ${DLC_RUN_AS_USER} -s /bin/bash -c $(quote_arg "${worker_command}"); else exec bash -lc $(quote_arg "${worker_command}"); fi")"
+worker_command="env EVAL_NAME=${EVAL_NAME} REPO_ID=${REPO_ID} MAX_SAMPLES=${MAX_SAMPLES} bash ${UAVEVAL_ROOT}/scripts/worldvln_dlc_worker.sh"
+command="bash -lc $(quote_arg "set -e; cd ${UAVEVAL_ROOT}; if [[ \$(id -u) == 0 ]]; then if ! id -u ${DLC_RUN_AS_USER} >/dev/null 2>&1; then useradd -m -s /bin/bash ${DLC_RUN_AS_USER}; fi; exec runuser -u ${DLC_RUN_AS_USER} -- ${worker_command}; else exec ${worker_command}; fi")"
 
 echo "Submitting ${JOB_NAME}"
 echo "Evaluation results: /mnt/petrelfs/youzhongrui/v2/AirBrain/eval_results/${EVAL_NAME}"
