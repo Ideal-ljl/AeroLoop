@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 <aerialvla|dualvln>" >&2
+  exit 2
+fi
+
+MODEL="$1"
+UAVEVAL_ROOT="${UAVEVAL_ROOT:-/mnt/petrelfs/youzhongrui/v2/UAVEval}"
+AIRBRAIN_ROOT="${AIRBRAIN_ROOT:-/mnt/petrelfs/youzhongrui/v2/AirBrain}"
+AB_EX_ROOT="${AB_EX_ROOT:-/home/liujunli/ceph/liujunli/Ab_ex}"
+EVAL_PYTHON="${EVAL_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/qwen/bin/python}"
+EVAL_NAME="${EVAL_NAME:-${MODEL}_airbrain_env_airsim_16}"
+REPO_ID="${REPO_ID:-env_airsim_16}"
+MAX_SAMPLES="${MAX_SAMPLES:-100}"
+RESULT_ROOT="${RESULT_ROOT:-${AIRBRAIN_ROOT}/eval_results/${EVAL_NAME}}"
+MODEL_GPU="${MODEL_GPU:-1}"
+SIM_GPU="${SIM_GPU:-0}"
+
+case "${MODEL}" in
+  aerialvla)
+    SERVER_PYTHON="${SERVER_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/uavflow/bin/python}"
+    SERVER_PORT=18101
+    CONFIG="${CONFIG:-${UAVEVAL_ROOT}/configs/models/aerialvla.yaml}"
+    server_args=(
+      aerialvla
+      --repo-root "${AB_EX_ROOT}/AerialVLA"
+      --ckpt-dir "${AB_EX_ROOT}/ckpt/AerialVLA"
+      --device cuda
+      --dtype bfloat16
+    )
+    ;;
+  dualvln)
+    SERVER_PYTHON="${SERVER_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/internnav-infer/bin/python}"
+    SERVER_PORT=18103
+    CONFIG="${CONFIG:-${UAVEVAL_ROOT}/configs/models/dualvln.yaml}"
+    server_args=(
+      dualvln
+      --repo-root "${AB_EX_ROOT}/DualVLN"
+      --ckpt-dir "${AB_EX_ROOT}/ckpt/DualVLN"
+      --device cuda
+      --dtype bfloat16
+      --predict-steps 32
+      --inference-steps 10
+      --sample-trajectories 32
+    )
+    ;;
+  *)
+    echo "unsupported model: ${MODEL}" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p "${RESULT_ROOT}"
+SERVER_LOG="${RESULT_ROOT}/${MODEL}_server.log"
+server_pid=""
+cleanup() {
+  if [[ -n "${server_pid}" ]]; then kill "${server_pid}" >/dev/null 2>&1 || true; fi
+}
+trap cleanup EXIT INT TERM
+
+export DISPLAY="${DISPLAY:-:9}"
+if command -v Xvfb >/dev/null 2>&1; then
+  Xvfb "${DISPLAY}" -screen 0 1024x768x24 >"${RESULT_ROOT}/xvfb.log" 2>&1 &
+fi
+
+echo "[model-worker] model=${MODEL} repo_id=${REPO_ID} max_samples=${MAX_SAMPLES}"
+nvidia-smi || true
+
+CUDA_VISIBLE_DEVICES="${MODEL_GPU}" \
+PYTHONPATH="${UAVEVAL_ROOT}/src" \
+"${SERVER_PYTHON}" -m uav_eval.server_cli "${server_args[@]}" \
+  --host 127.0.0.1 \
+  --port "${SERVER_PORT}" >"${SERVER_LOG}" 2>&1 &
+server_pid=$!
+
+SERVER_PORT="${SERVER_PORT}" MODEL="${MODEL}" "${EVAL_PYTHON}" - <<'PY'
+import json
+import os
+import time
+import urllib.request
+
+url = f"http://127.0.0.1:{os.environ['SERVER_PORT']}/health"
+deadline = time.time() + 900
+while time.time() < deadline:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            payload = json.load(response)
+        if payload.get("status") == "ok":
+            print(f"[model-worker] {os.environ['MODEL']} health: {payload}", flush=True)
+            break
+    except Exception as exc:
+        print(f"[model-worker] waiting for {os.environ['MODEL']}: {exc}", flush=True)
+    time.sleep(10)
+else:
+    raise TimeoutError(f"{os.environ['MODEL']} did not become healthy in 900 seconds")
+PY
+
+cd "${RESULT_ROOT}"
+CUDA_VISIBLE_DEVICES="${SIM_GPU}" \
+PYTHONPATH="${UAVEVAL_ROOT}/src:${AIRBRAIN_ROOT}" \
+"${EVAL_PYTHON}" -m uav_eval run \
+  --config "${CONFIG}" \
+  --repo-id "${REPO_ID}" \
+  --max-samples "${MAX_SAMPLES}" \
+  --output-jsonl "${RESULT_ROOT}/eval_results.jsonl" \
+  --headless \
+  --no-video
