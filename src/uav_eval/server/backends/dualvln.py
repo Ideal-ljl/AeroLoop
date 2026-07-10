@@ -60,6 +60,9 @@ class DualVLNBackend(ModelBackend):
         self.processor = AutoProcessor.from_pretrained(stage1)
         self.processor.tokenizer = AutoTokenizer.from_pretrained(stage2, use_fast=True)
         self.processor.tokenizer.padding_side = "left"
+        self.processor.chat_template = self.processor.tokenizer.chat_template
+        if not self.processor.chat_template:
+            raise ValueError(f"DualVLN stage-2 tokenizer has no chat template: {stage2}")
         self.episode_id = None
 
     def health(self):
