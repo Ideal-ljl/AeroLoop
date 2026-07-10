@@ -15,6 +15,7 @@ RESULT_ROOT="${RESULT_ROOT:-${AIRBRAIN_ROOT}/eval_results/${EVAL_NAME}}"
 CONFIG="${CONFIG:-${UAVEVAL_ROOT}/configs/jobs/worldvln_airbrain_env_airsim_16.yaml}"
 MODEL_GPU="${MODEL_GPU:-1}"
 SIM_GPU="${SIM_GPU:-0}"
+SIM_GRAPHICS_ADAPTER="${SIM_GRAPHICS_ADAPTER:-${SIM_GPU}}"
 
 mkdir -p "${RESULT_ROOT}"
 T5_LINK="${RESULT_ROOT}/flan-t5-xl"
@@ -118,6 +119,7 @@ PY
 
 cd "${RESULT_ROOT}"
 CUDA_VISIBLE_DEVICES="${SIM_GPU}" \
+AIRBRAIN_SIM_ARGS="-graphicsadapter=${SIM_GRAPHICS_ADAPTER}" \
 PYTHONPATH="${UAVEVAL_ROOT}/src:${AIRBRAIN_ROOT}" \
 "${EVAL_PYTHON}" -m uav_eval run --config "${CONFIG}" \
   --repo-id "${REPO_ID}" \
