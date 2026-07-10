@@ -21,7 +21,14 @@ class AerialVLABackend(ModelBackend):
             sys.path.insert(0, str(self.repo_root))
 
         import torch
+        import transformers
         from peft import PeftModel
+
+        # The shared uavflow environment contains a flash-attn wheel built
+        # against a different PyTorch ABI.  AerialVLA uses eager attention,
+        # so prevent Transformers from importing that optional broken wheel.
+        transformers.utils.is_flash_attn_2_available = lambda: False
+        transformers.utils.import_utils.is_flash_attn_2_available = lambda: False
         from transformers import AutoImageProcessor, AutoModelForVision2Seq, AutoTokenizer
 
         self.torch = torch
