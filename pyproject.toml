@@ -8,10 +8,15 @@ version = "0.1.0"
 description = "Model-agnostic closed-loop evaluation for UAV navigation policies"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "UAVEval contributors"}]
+keywords = ["UAV", "VLN", "VLA", "evaluation", "robotics"]
 dependencies = ["PyYAML>=5.4"]
 
 [project.optional-dependencies]
-airbrain = ["numpy", "opencv-python", "open3d"]
+media = ["numpy>=1.23", "opencv-python>=4.8"]
+airbrain = ["numpy>=1.23", "opencv-python>=4.8", "open3d>=0.17"]
+all = ["numpy>=1.23", "opencv-python>=4.8", "open3d>=0.17"]
 dev = ["pytest>=7", "ruff>=0.5"]
 
 [project.scripts]
@@ -19,6 +24,9 @@ uav-eval = "uav_eval.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+uav_eval = ["resources/*.yaml"]
 
 [tool.ruff]
 line-length = 120

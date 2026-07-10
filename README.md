@@ -61,6 +61,21 @@ pip install -e .
 uav-eval run --config configs/mock.yaml
 ```
 
+For live visualization and MP4 output:
+
+```bash
+pip install -e '.[media]'
+uav-eval doctor
+uav-eval init-config --template airbrain-http --output uav_eval.yaml
+```
+
+The `media` extra provides NumPy and OpenCV. MP4 streaming additionally uses
+the system `ffmpeg` executable. Full AirBrain environments can use:
+
+```bash
+pip install -e '.[airbrain]'
+```
+
 ## AirBrain evaluation
 
 The AirBrain adapter reuses `scripts/env_bridge.py`, including the AirSim,
@@ -76,6 +91,33 @@ PYTHONPATH=src python -m uav_eval run --config configs/airbrain_http.yaml
 
 The AirBrain runtime additionally needs its normal simulator dependencies such
 as NumPy, OpenCV, Open3D, AirSim/UnrealCV, and the environment assets.
+
+## Visualization and video
+
+Media output is configured independently of the model and simulator:
+
+```yaml
+media:
+  show_window: true
+  window_name: UAVEval AirBrain
+  wait_ms: 1
+  overlay: true
+  save_video: true
+  video_dir: eval_results/videos
+  video_fps: 10
+  ffmpeg_bin: ffmpeg
+  save_collision_frame: true
+  collision_dir: eval_results/collisions
+```
+
+The window displays the current RGB observation with action, pose, distance,
+collision, chunk index, and inference latency. Press `Space` to pause/resume;
+press `q` or `Esc` to end the current episode cleanly. Videos are streamed to
+H.264 MP4 one frame at a time, so long evaluations do not keep all frames in
+RAM. Video and collision-image paths are included in the episode's `artifacts`
+field in the JSONL output.
+
+On a headless node set `show_window: false`; video saving continues to work.
 
 ## HTTP policy contract
 
@@ -163,3 +205,26 @@ explicit stop.
 The next integration layer should provide one HTTP server per AerialVLA,
 DualVLN, OpenUAV, and WorldVLN environment. The benchmark runner and simulator
 do not change when a new model is added.
+
+## Python API
+
+Applications can use the package without the CLI:
+
+```python
+from uav_eval import MetricConfig, RolloutConfig, RolloutRunner
+from uav_eval.media import MediaConfig, MediaObserver
+
+observer = MediaObserver(MediaConfig(show_window=True, save_video=True))
+runner = RolloutRunner(
+    environment=my_environment,
+    policy=my_policy,
+    rollout=RolloutConfig(execution_horizon=1),
+    metrics=MetricConfig(distance_mode="endpoint_3d"),
+    observers=[observer],
+)
+result = runner.run_episode(episode)
+observer.close()
+```
+
+`EnvironmentAdapter`, `PolicyAdapter`, and `RolloutObserver` are stable public
+extension points for downstream packages.

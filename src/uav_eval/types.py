@@ -129,6 +129,7 @@ class TerminationReason(str, Enum):
     COLLISION = "collision"
     MAX_STEPS = "max_steps"
     ERROR = "error"
+    USER_ABORT = "user_abort"
 
 
 @dataclass(frozen=True)
@@ -167,6 +168,7 @@ class EpisodeResult:
     metrics: Mapping[str, Any]
     steps: tuple[StepRecord, ...]
     error: str | None = None
+    artifacts: Mapping[str, Any] = field(default_factory=dict)
 
     def as_dict(self, include_steps: bool = True) -> dict[str, Any]:
         row = {
@@ -176,6 +178,7 @@ class EpisodeResult:
             "termination_reason": self.termination_reason.value,
             **dict(self.metrics),
             "error": self.error,
+            "artifacts": dict(self.artifacts),
         }
         if include_steps:
             row["steps"] = [step.as_dict() for step in self.steps]

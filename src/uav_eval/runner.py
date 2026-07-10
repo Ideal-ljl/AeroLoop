@@ -3,9 +3,11 @@ from __future__ import annotations
 import time
 from collections import deque
 from dataclasses import dataclass
+from typing import Sequence
 
 from .metrics import EpisodeMetrics, MetricConfig
 from .protocols import EnvironmentAdapter, PolicyAdapter
+from .observers import RolloutObserver
 from .types import (
     CanonicalAction,
     EpisodeResult,
@@ -25,6 +27,7 @@ class RolloutConfig:
     terminate_on_collision: bool = True
     execute_motion_on_stop: bool = False
     include_steps_in_result: bool = True
+    fail_on_observer_error: bool = False
 
     def __post_init__(self) -> None:
         if self.max_steps <= 0:
@@ -40,11 +43,24 @@ class RolloutRunner:
         policy: PolicyAdapter,
         rollout: RolloutConfig | None = None,
         metrics: MetricConfig | None = None,
+        observers: Sequence[RolloutObserver] | None = None,
     ):
         self.environment = environment
         self.policy = policy
         self.rollout = rollout or RolloutConfig()
         self.metric_config = metrics or MetricConfig()
+        self.observers = list(observers or [])
+
+    def _observer_call(self, method: str, *args):
+        values = []
+        for observer in self.observers:
+            try:
+                values.append(getattr(observer, method)(*args))
+            except Exception as exc:
+                if self.rollout.fail_on_observer_error:
+                    raise
+                print(f"[observer warning] {type(observer).__name__}.{method}: {type(exc).__name__}: {exc}")
+        return values
 
     def run_episode(self, episode: EpisodeSpec) -> EpisodeResult:
         records: list[StepRecord] = []
@@ -67,6 +83,7 @@ class RolloutRunner:
         try:
             self.policy.reset(episode)
             observation = self.environment.reset(episode)
+            self._observer_call("on_episode_start", episode, observation)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
             metrics = tracker.finalize(TerminationReason.ERROR, observation.pose, 0)
@@ -113,8 +130,7 @@ class RolloutRunner:
                 distances = tracker.update(before, observation.pose, collision=transition.collision, info=transition.info)
                 self.policy.on_action_executed(effective_action, transition)
 
-                records.append(
-                    StepRecord(
+                record = StepRecord(
                         step=step,
                         inference_call=call_index,
                         action_index=action_index,
@@ -126,10 +142,15 @@ class RolloutRunner:
                         distances=distances,
                         policy_metadata=policy_metadata,
                     )
-                )
+                records.append(record)
                 image_history.append(before_observation.rgb)
                 action_history.append(effective_action)
                 state_history.append(before_observation.relative_state)
+
+                observer_values = self._observer_call("on_step", episode, observation, record)
+                if any(value is False for value in observer_values):
+                    termination = TerminationReason.USER_ABORT
+                    break
 
                 if transition.collision and self.rollout.terminate_on_collision:
                     termination = TerminationReason.COLLISION
@@ -144,7 +165,7 @@ class RolloutRunner:
             error = f"{type(exc).__name__}: {exc}"
 
         metrics = tracker.finalize(termination, observation.pose, len(records))
-        return EpisodeResult(
+        result = EpisodeResult(
             episode_id=episode.episode_id,
             env_name=episode.env_name,
             termination_reason=termination,
@@ -152,3 +173,21 @@ class RolloutRunner:
             steps=tuple(records) if self.rollout.include_steps_in_result else (),
             error=error,
         )
+        self._observer_call("on_episode_end", episode, observation, result)
+        artifacts = {}
+        for observer in self.observers:
+            try:
+                artifacts.update(observer.artifacts())
+            except Exception:
+                pass
+        if artifacts:
+            result = EpisodeResult(
+                episode_id=result.episode_id,
+                env_name=result.env_name,
+                termination_reason=result.termination_reason,
+                metrics=result.metrics,
+                steps=result.steps,
+                error=result.error,
+                artifacts=artifacts,
+            )
+        return result
