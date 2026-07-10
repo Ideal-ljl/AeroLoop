@@ -17,6 +17,8 @@ MODEL_GPU="${MODEL_GPU:-1}"
 SIM_GPU="${SIM_GPU:-0}"
 
 mkdir -p "${RESULT_ROOT}"
+T5_LINK="${RESULT_ROOT}/flan-t5-xl"
+ln -sfn "${WORLDVLN_CKPT_ROOT}/t5" "${T5_LINK}"
 NATIVE_LOG="${RESULT_ROOT}/worldvln_native.log"
 PROXY_LOG="${RESULT_ROOT}/worldvln_proxy.log"
 
@@ -47,6 +49,8 @@ nvidia-smi || true
 
 (
   cd "${WORLDVLN_ROOT}"
+  # encode_prompt selects the Hugging Face T5 branch by checking whether the
+  # configured checkpoint path contains "flan-t5".
   CUDA_VISIBLE_DEVICES="${MODEL_GPU}" \
   PYTHONPATH="${RUNTIME_SITE}:${WORLDVLN_ROOT}/Worldmodel/runtime" \
   PYTHON_BIN="${SERVER_PYTHON}" \
@@ -55,7 +59,7 @@ nvidia-smi || true
   STAGE2_LATENT2ACTION_CKPT="${WORLDVLN_CKPT_ROOT}/action_decoder.pt" \
   VAE_PATH="${WORLDVLN_CKPT_ROOT}/vae/model.safetensors" \
   STAGE2_VAE_PATH="${WORLDVLN_CKPT_ROOT}/vae/model.safetensors" \
-  T5_PATH="${WORLDVLN_CKPT_ROOT}/t5" \
+  T5_PATH="${T5_LINK}" \
   bash infer/run_server.sh
 ) >"${NATIVE_LOG}" 2>&1 &
 native_pid=$!
