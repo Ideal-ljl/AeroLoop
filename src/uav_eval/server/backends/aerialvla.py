@@ -82,7 +82,7 @@ class AerialVLABackend(ModelBackend):
         rgb = request.decode_rgb()
         image = Image.fromarray(rgb)
         prompt = f"<image>\n{request.instruction.strip()}\nAction: "
-        text = self.tokenizer(prompt, add_special_tokens=False, return_tensors="pt").to(self.device)
+        text = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         pixels = self.image_processor(images=image, return_tensors="pt")["pixel_values"].to(
             self.device, dtype=self.model.dtype
         )
@@ -91,12 +91,12 @@ class AerialVLABackend(ModelBackend):
                 input_ids=text["input_ids"],
                 attention_mask=text.get("attention_mask"),
                 pixel_values=pixels,
-                max_new_tokens=16,
+                max_new_tokens=20,
                 do_sample=False,
                 use_cache=True,
+                eos_token_id=[self.tokenizer.eos_token_id],
             )
-        new_ids = output_ids[0, text["input_ids"].shape[1] :]
-        decoded = self.tokenizer.decode(new_ids, skip_special_tokens=False)
+        decoded = self.tokenizer.decode(output_ids[0], skip_special_tokens=False)
         forward, down, d_yaw, stop = self.parse_action(decoded)
         action = [float(forward), 0.0, float(down), float(d_yaw), float(stop)]
         return {
