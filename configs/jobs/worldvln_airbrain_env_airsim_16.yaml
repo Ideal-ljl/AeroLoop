@@ -1,0 +1,15 @@
+extends: ../models/worldvln.yaml
+
+benchmark:
+  repo_id: env_airsim_16
+  max_samples: 100
+
+output:
+  jsonl: eval_results.jsonl
+  include_steps: true
+
+media:
+  show_window: false
+  save_video: false
+  save_collision_frame: true
+  collision_dir: collisions
