@@ -84,8 +84,10 @@ def create_server(backend: ModelBackend, host: str = "127.0.0.1", port: int = 18
                         return
                 self._send(404, {"error": "not found"})
             except (ValueError, KeyError, json.JSONDecodeError) as exc:
+                print(f"[model-server] request rejected: {type(exc).__name__}: {exc}", flush=True)
                 self._send(400, {"error": f"{type(exc).__name__}: {exc}"})
             except Exception as exc:
+                print(f"[model-server] backend failed: {type(exc).__name__}: {exc}", flush=True)
                 self._send(500, {"error": f"{type(exc).__name__}: {exc}"})
 
         def log_message(self, format, *args):

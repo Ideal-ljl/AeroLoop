@@ -18,6 +18,7 @@ DLC_RUN_AS_USER="${DLC_RUN_AS_USER:-youzhongrui}"
 REPO_ID="${REPO_ID:-env_airsim_16}"
 REPO_SLUG="${REPO_ID//_/-}"
 MAX_SAMPLES="${MAX_SAMPLES:-100}"
+MODEL_ONLY_SMOKE="${MODEL_ONLY_SMOKE:-false}"
 EVAL_NAME="${EVAL_NAME:-${MODEL}_airbrain_${REPO_ID}_$(date +%Y%m%d_%H%M%S)}"
 JOB_NAME="${JOB_NAME:-${REPO_SLUG}-${MODEL}-$(date +%Y%m%d-%H%M%S)}"
 
@@ -33,7 +34,7 @@ quote_arg() {
   printf "'%s'" "$(printf "%s" "$value" | sed "s/'/'\\''/g")"
 }
 
-worker_command="env MODEL_GPU=1 SIM_GPU=0 EVAL_NAME=${EVAL_NAME} REPO_ID=${REPO_ID} MAX_SAMPLES=${MAX_SAMPLES} bash ${UAVEVAL_ROOT}/scripts/model_dlc_worker.sh ${MODEL}"
+worker_command="env MODEL_GPU=1 SIM_GPU=0 EVAL_NAME=${EVAL_NAME} REPO_ID=${REPO_ID} MAX_SAMPLES=${MAX_SAMPLES} MODEL_ONLY_SMOKE=${MODEL_ONLY_SMOKE} bash ${UAVEVAL_ROOT}/scripts/model_dlc_worker.sh ${MODEL}"
 command="bash -lc $(quote_arg "set -e; cd ${UAVEVAL_ROOT}; if [[ \$(id -u) == 0 ]]; then if ! id -u ${DLC_RUN_AS_USER} >/dev/null 2>&1; then useradd -m -s /bin/bash ${DLC_RUN_AS_USER}; fi; exec runuser -u ${DLC_RUN_AS_USER} -- ${worker_command}; else exec ${worker_command}; fi")"
 echo "Submitting ${JOB_NAME}"
 echo "Evaluation results: /mnt/petrelfs/youzhongrui/v2/AirBrain/eval_results/${EVAL_NAME}"

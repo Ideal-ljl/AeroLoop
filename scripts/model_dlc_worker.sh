@@ -14,6 +14,7 @@ EVAL_PYTHON="${EVAL_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/qwen/bin/p
 EVAL_NAME="${EVAL_NAME:-${MODEL}_airbrain_env_airsim_16}"
 REPO_ID="${REPO_ID:-env_airsim_16}"
 MAX_SAMPLES="${MAX_SAMPLES:-100}"
+MODEL_ONLY_SMOKE="${MODEL_ONLY_SMOKE:-false}"
 RESULT_ROOT="${RESULT_ROOT:-${AIRBRAIN_ROOT}/eval_results/${EVAL_NAME}}"
 MODEL_GPU="${MODEL_GPU:-1}"
 SIM_GPU="${SIM_GPU:-0}"
@@ -96,6 +97,42 @@ while time.time() < deadline:
 else:
     raise TimeoutError(f"{os.environ['MODEL']} did not become healthy in 900 seconds")
 PY
+
+if [[ "${MODEL_ONLY_SMOKE}" == "true" ]]; then
+  SERVER_PORT="${SERVER_PORT}" MODEL="${MODEL}" "${EVAL_PYTHON}" - <<'PY'
+import base64
+import io
+import json
+import os
+import urllib.error
+import urllib.request
+
+from PIL import Image
+
+buffer = io.BytesIO()
+Image.new("RGB", (640, 480), color=(96, 128, 160)).save(buffer, format="PNG")
+image = base64.b64encode(buffer.getvalue()).decode("ascii")
+base_url = f"http://127.0.0.1:{os.environ['SERVER_PORT']}"
+common = {"episode_id": "http-smoke", "instruction": "Fly toward the target building.", "env_name": "env_airsim_16"}
+for path, payload in (
+    ("/v1/reset", common),
+    ("/v1/predict", {**common, "step": 0, "state": [0, 0, 0, 0], "pose": [0, 0, 0, 0], "image_base64": image, "image_format": "png_rgb"}),
+):
+    request = urllib.request.Request(
+        base_url + path,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=900) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"{path} returned HTTP {exc.code}: {exc.read().decode()}") from exc
+    print(f"[model-worker] {os.environ['MODEL']} {path}: {result}", flush=True)
+PY
+  exit 0
+fi
 
 cd "${RESULT_ROOT}"
 CUDA_VISIBLE_DEVICES="${SIM_GPU}" \
