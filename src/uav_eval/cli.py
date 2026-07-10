@@ -95,6 +95,11 @@ def main(argv: list[str] | None = None) -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     run_parser = sub.add_parser("run", help="run a benchmark config")
     run_parser.add_argument("--config", required=True)
+    run_parser.add_argument("--repo-id", help="override benchmark.repo_id")
+    run_parser.add_argument("--max-samples", type=int, help="override per-environment sample limit")
+    run_parser.add_argument("--output-jsonl", help="override output.jsonl")
+    run_parser.add_argument("--headless", action="store_true", help="disable the visualization window")
+    run_parser.add_argument("--no-video", action="store_true", help="disable MP4 recording")
     sub.add_parser("doctor", help="check optional runtime dependencies")
     init_parser = sub.add_parser("init-config", help="write a packaged config template")
     init_parser.add_argument("--template", choices=("mock", "airbrain-http"), default="airbrain-http")
@@ -105,7 +110,18 @@ def main(argv: list[str] | None = None) -> None:
     inspect_parser.add_argument("--max-samples", type=int)
     args = parser.parse_args(argv)
     if args.command == "run":
-        run(load_config(args.config))
+        config = load_config(args.config)
+        if args.repo_id is not None:
+            config.setdefault("benchmark", {})["repo_id"] = args.repo_id
+        if args.max_samples is not None:
+            config.setdefault("benchmark", {})["max_samples"] = args.max_samples
+        if args.output_jsonl is not None:
+            config.setdefault("output", {})["jsonl"] = args.output_jsonl
+        if args.headless:
+            config.setdefault("media", {})["show_window"] = False
+        if args.no_video:
+            config.setdefault("media", {})["save_video"] = False
+        run(config)
     elif args.command == "doctor":
         checks = {
             "numpy": importlib.util.find_spec("numpy") is not None,

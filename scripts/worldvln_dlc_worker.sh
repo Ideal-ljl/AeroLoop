@@ -9,6 +9,8 @@ SERVER_PYTHON="${SERVER_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/intern
 EVAL_PYTHON="${EVAL_PYTHON:-/mnt/petrelfs/youzhongrui/miniconda3/envs/qwen/bin/python}"
 RUNTIME_SITE="${RUNTIME_SITE:-${UAVEVAL_ROOT}/.runtime/worldvln}"
 EVAL_NAME="${EVAL_NAME:-worldvln_airbrain_env_airsim_16}"
+REPO_ID="${REPO_ID:-env_airsim_16}"
+MAX_SAMPLES="${MAX_SAMPLES:-100}"
 RESULT_ROOT="${RESULT_ROOT:-${AIRBRAIN_ROOT}/eval_results/${EVAL_NAME}}"
 CONFIG="${CONFIG:-${UAVEVAL_ROOT}/configs/jobs/worldvln_airbrain_env_airsim_16.yaml}"
 MODEL_GPU="${MODEL_GPU:-1}"
@@ -113,4 +115,9 @@ PY
 cd "${RESULT_ROOT}"
 CUDA_VISIBLE_DEVICES="${SIM_GPU}" \
 PYTHONPATH="${UAVEVAL_ROOT}/src:${AIRBRAIN_ROOT}" \
-"${EVAL_PYTHON}" -m uav_eval run --config "${CONFIG}"
+"${EVAL_PYTHON}" -m uav_eval run --config "${CONFIG}" \
+  --repo-id "${REPO_ID}" \
+  --max-samples "${MAX_SAMPLES}" \
+  --output-jsonl "${RESULT_ROOT}/eval_results.jsonl" \
+  --headless \
+  --no-video

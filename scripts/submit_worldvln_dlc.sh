@@ -9,15 +9,18 @@ DLC_PRIORITY="${DLC_PRIORITY:-9}"
 DLC_OVERSOLD_TYPE="${DLC_OVERSOLD_TYPE:-AcceptQuotaOverSold}"
 DLC_IMAGE="${DLC_IMAGE:-pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/youzhongrui:vulkan-vnc-0507}"
 DLC_DATA_SOURCES="${DLC_DATA_SOURCES:-d-rnpuwbph06wa8yzp8e:v1:/oss,d-3ri6drol6oq8cht5q9:v1:/cpfs/user/youzhongrui/,d-3ri6drol6oq8cht5q9:v1:/mnt/petrelfs/youzhongrui,d-x5hqw561pe26bnavyd:v1:/home/liujunli/ceph}"
-EVAL_NAME="${EVAL_NAME:-worldvln_airbrain_env_airsim_16_$(date +%Y%m%d_%H%M%S)}"
-JOB_NAME="${JOB_NAME:-env-airsim-16-worldvln-$(date +%Y%m%d-%H%M%S)}"
+REPO_ID="${REPO_ID:-env_airsim_16}"
+REPO_SLUG="${REPO_ID//_/-}"
+MAX_SAMPLES="${MAX_SAMPLES:-100}"
+EVAL_NAME="${EVAL_NAME:-worldvln_airbrain_${REPO_ID}_$(date +%Y%m%d_%H%M%S)}"
+JOB_NAME="${JOB_NAME:-${REPO_SLUG}-worldvln-$(date +%Y%m%d-%H%M%S)}"
 
 quote_arg() {
   local value="$1"
   printf "'%s'" "$(printf "%s" "$value" | sed "s/'/'\\''/g")"
 }
 
-worker_command="cd $(quote_arg "${UAVEVAL_ROOT}") && EVAL_NAME=$(quote_arg "${EVAL_NAME}") bash $(quote_arg "${UAVEVAL_ROOT}/scripts/worldvln_dlc_worker.sh")"
+worker_command="cd $(quote_arg "${UAVEVAL_ROOT}") && EVAL_NAME=$(quote_arg "${EVAL_NAME}") REPO_ID=$(quote_arg "${REPO_ID}") MAX_SAMPLES=$(quote_arg "${MAX_SAMPLES}") bash $(quote_arg "${UAVEVAL_ROOT}/scripts/worldvln_dlc_worker.sh")"
 command="bash -lc $(quote_arg "set -e; ${worker_command}")"
 
 echo "Submitting ${JOB_NAME}"
