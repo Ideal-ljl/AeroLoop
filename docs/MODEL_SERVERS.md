@@ -72,6 +72,9 @@ First start the native WorldVLN service in its environment:
 cd /path/to/WorldVLN
 INFINITY_CKPT=/path/to/backbone_stage1.pth \
 STAGE2_LATENT2ACTION_CKPT=/path/to/action_decoder.pt \
+VAE_PATH=/path/to/vae/model.safetensors \
+STAGE2_VAE_PATH=/path/to/vae/model.safetensors \
+T5_PATH=/path/to/flan-t5-xl-directory \
 bash infer/run_server.sh
 ```
 
