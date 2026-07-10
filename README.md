@@ -89,6 +89,19 @@ Edit `configs/airbrain_http.yaml`, start a model service, then run:
 PYTHONPATH=src python -m uav_eval run --config configs/airbrain_http.yaml
 ```
 
+The default config uses the same AirBrain test set as `test_full_his.py`:
+`dataset/test_data_fixed_100_no_gzday_traj271.json`. It contains 1,100
+episodes—100 episodes in each of 11 environments. Validate the resolved paths
+and selection without starting a simulator:
+
+```bash
+uav-eval inspect-airbrain \
+  --eval-config /mnt/petrelfs/youzhongrui/v2/AirBrain/dataset/test_data_fixed_100_no_gzday_traj271.json
+```
+
+`benchmark.max_samples` follows AirBrain semantics and is applied per
+environment, rather than globally.
+
 The AirBrain runtime additionally needs its normal simulator dependencies such
 as NumPy, OpenCV, Open3D, AirSim/UnrealCV, and the environment assets.
 

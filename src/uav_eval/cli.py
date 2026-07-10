@@ -5,7 +5,7 @@ import importlib.util
 from importlib import resources
 import shutil
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from .config import load_config
@@ -99,6 +99,10 @@ def main(argv: list[str] | None = None) -> None:
     init_parser = sub.add_parser("init-config", help="write a packaged config template")
     init_parser.add_argument("--template", choices=("mock", "airbrain-http"), default="airbrain-http")
     init_parser.add_argument("--output", default="uav_eval.yaml")
+    inspect_parser = sub.add_parser("inspect-airbrain", help="validate and summarize an AirBrain eval JSON")
+    inspect_parser.add_argument("--eval-config", required=True)
+    inspect_parser.add_argument("--repo-id")
+    inspect_parser.add_argument("--max-samples", type=int)
     args = parser.parse_args(argv)
     if args.command == "run":
         run(load_config(args.config))
@@ -115,10 +119,24 @@ def main(argv: list[str] | None = None) -> None:
         destination = Path(args.output)
         if destination.exists():
             raise FileExistsError(f"refusing to overwrite existing config: {destination}")
-        template = resources.files("uav_eval").joinpath("resources", f"{args.template}.yaml").read_text(encoding="utf-8")
+        template = (
+            resources.files("uav_eval")
+            .joinpath("resources", f"{args.template}.yaml")
+            .read_text(encoding="utf-8")
+        )
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(template, encoding="utf-8")
         print(f"wrote {args.template} template: {destination}")
+    elif args.command == "inspect-airbrain":
+        episodes = load_airbrain_episodes(
+            args.eval_config,
+            repo_id=args.repo_id,
+            max_samples=args.max_samples,
+        )
+        counts = Counter(episode.env_name for episode in episodes)
+        print(f"episodes: {len(episodes)}")
+        for env_name, count in sorted(counts.items()):
+            print(f"{env_name}: {count}")
 
 
 if __name__ == "__main__":

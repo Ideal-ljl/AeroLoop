@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
 from uav_eval.policies.http import HttpPolicy
-from uav_eval.server import ModelBackend, PredictRequest, create_server
+from uav_eval.server import ModelBackend, PredictRequest, create_server, heading_delta_from_translation
 from uav_eval.server.backends.openuav import missing_navigation_weights, normalize_checkpoint_state
 from uav_eval.types import EpisodeSpec, Observation, PolicyInput, Pose
 
@@ -79,6 +79,10 @@ class ModelServerTest(unittest.TestCase):
             missing_navigation_weights(keys),
             ["embed_tokens", "waypoint_emb", "waypoints_fc", "waypoints_output", "history_preprocessor"],
         )
+
+    def test_translation_heading_matches_airbrain_local_action(self):
+        self.assertAlmostEqual(heading_delta_from_translation(1, 1), 0.7853981633974483)
+        self.assertEqual(heading_delta_from_translation(0, 0), 0.0)
 
 
 if __name__ == "__main__":

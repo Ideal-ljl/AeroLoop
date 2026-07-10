@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from ..base import ModelBackend, PredictRequest
+from ..base import ModelBackend, PredictRequest, heading_delta_from_translation
 
 
 _REQUIRED_NAVIGATION_WEIGHTS = (
@@ -269,9 +269,10 @@ class OpenUAVBackend(ModelBackend):
             unit = unit / length
         delta = unit * norm
         stop = 1.0 if norm < self.stop_norm_threshold else 0.0
+        d_yaw = heading_delta_from_translation(delta[0], delta[1])
         self.state_history.append(tuple(request.state[:3]))
         return {
-            "actions": [[float(delta[0]), float(delta[1]), float(delta[2]), 0.0, stop]],
+            "actions": [[float(delta[0]), float(delta[1]), float(delta[2]), d_yaw, stop]],
             "metadata": {
                 "model": self.name,
                 "native_waypoint": [float(x) for x in wp[:4]],

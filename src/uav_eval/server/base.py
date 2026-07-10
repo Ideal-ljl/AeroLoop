@@ -8,6 +8,13 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
+def heading_delta_from_translation(dx: float, dy: float, epsilon: float = 1e-8) -> float:
+    """Match AirBrain's local-trajectory convention with an explicit yaw delta."""
+    if math.hypot(float(dx), float(dy)) <= epsilon:
+        return 0.0
+    return math.atan2(float(dy), float(dx))
+
+
 @dataclass(frozen=True)
 class PredictRequest:
     episode_id: str

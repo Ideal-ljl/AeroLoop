@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from ..base import ModelBackend, PredictRequest
+from ..base import ModelBackend, PredictRequest, heading_delta_from_translation
 
 
 class DualVLNBackend(ModelBackend):
@@ -118,7 +118,13 @@ class DualVLNBackend(ModelBackend):
         if float(speeds[-3:].mean()) < self.stop_speed_threshold:
             stops[-1] = 1.0
         actions = [
-            [float(delta[0]), float(delta[1]), float(delta[2]), 0.0, float(stops[index])]
+            [
+                float(delta[0]),
+                float(delta[1]),
+                float(delta[2]),
+                heading_delta_from_translation(delta[0], delta[1]),
+                float(stops[index]),
+            ]
             for index, delta in enumerate(deltas)
         ]
         return {

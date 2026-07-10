@@ -97,6 +97,11 @@ can be run directly after editing dataset paths. The primary benchmark may retai
 `execution_horizon: 1`; the WorldVLN proxy will still disclose its intrinsic
 segment-level open-loop behavior in metadata.
 
+DualVLN and OpenUAV predict local XYZ trajectories without a separate yaw
+channel. Their adapters derive `d_yaw=atan2(dy,dx)`, matching AirBrain's
+trajectory-heading update. AerialVLA and WorldVLN retain their native explicit
+yaw predictions.
+
 ```bash
 uav-eval run --config configs/models/aerialvla.yaml
 ```
