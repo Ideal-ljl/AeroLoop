@@ -31,7 +31,13 @@ class AerialVLABackend(ModelBackend):
         base = self.ckpt_dir / "openvla-7b"
         lora = self.ckpt_dir / "lora"
         tokenizer_path = lora if (lora / "tokenizer_config.json").is_file() else base
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+        # Some AerialVLA checkpoints were saved with a tokenizer.json newer
+        # than the tokenizers build in the DLC runtime.  The sentencepiece
+        # tokenizer files remain compatible, so deliberately use the slow
+        # implementation instead of failing while parsing tokenizer.json.
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_path, trust_remote_code=True, use_fast=False
+        )
         self.image_processor = AutoImageProcessor.from_pretrained(base, trust_remote_code=True)
         torch_dtype = getattr(torch, dtype)
         model = AutoModelForVision2Seq.from_pretrained(

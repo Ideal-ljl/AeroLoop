@@ -121,3 +121,7 @@ PYTHONPATH="${UAVEVAL_ROOT}/src:${AIRBRAIN_ROOT}" \
   --output-jsonl "${RESULT_ROOT}/eval_results.jsonl" \
   --headless \
   --no-video
+
+"${EVAL_PYTHON}" "${UAVEVAL_ROOT}/scripts/validate_eval_jsonl.py" \
+  "${RESULT_ROOT}/eval_results.jsonl" \
+  --expected "${MAX_SAMPLES}"

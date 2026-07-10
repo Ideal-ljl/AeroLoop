@@ -9,6 +9,7 @@ DLC_PRIORITY="${DLC_PRIORITY:-9}"
 DLC_OVERSOLD_TYPE="${DLC_OVERSOLD_TYPE:-AcceptQuotaOverSold}"
 DLC_IMAGE="${DLC_IMAGE:-pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/youzhongrui:vulkan-vnc-0507}"
 DLC_DATA_SOURCES="${DLC_DATA_SOURCES:-d-rnpuwbph06wa8yzp8e:v1:/oss,d-3ri6drol6oq8cht5q9:v1:/cpfs/user/youzhongrui/,d-3ri6drol6oq8cht5q9:v1:/mnt/petrelfs/youzhongrui,d-x5hqw561pe26bnavyd:v1:/home/liujunli/ceph}"
+DLC_RUN_AS_USER="${DLC_RUN_AS_USER:-youzhongrui}"
 REPO_ID="${REPO_ID:-env_airsim_16}"
 REPO_SLUG="${REPO_ID//_/-}"
 MAX_SAMPLES="${MAX_SAMPLES:-100}"
@@ -21,7 +22,7 @@ quote_arg() {
 }
 
 worker_command="cd $(quote_arg "${UAVEVAL_ROOT}") && EVAL_NAME=$(quote_arg "${EVAL_NAME}") REPO_ID=$(quote_arg "${REPO_ID}") MAX_SAMPLES=$(quote_arg "${MAX_SAMPLES}") bash $(quote_arg "${UAVEVAL_ROOT}/scripts/worldvln_dlc_worker.sh")"
-command="bash -lc $(quote_arg "set -e; ${worker_command}")"
+command="bash -lc $(quote_arg "set -e; if [[ \$(id -u) == 0 ]]; then if ! id -u ${DLC_RUN_AS_USER} >/dev/null 2>&1; then useradd -m -s /bin/bash ${DLC_RUN_AS_USER}; fi; exec su - ${DLC_RUN_AS_USER} -s /bin/bash -c $(quote_arg "${worker_command}"); else exec bash -lc $(quote_arg "${worker_command}"); fi")"
 
 echo "Submitting ${JOB_NAME}"
 echo "Evaluation results: /mnt/petrelfs/youzhongrui/v2/AirBrain/eval_results/${EVAL_NAME}"
