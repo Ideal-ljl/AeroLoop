@@ -20,7 +20,13 @@ MAX_SAMPLES="${MAX_SAMPLES:-100}"
 EVAL_NAME="${EVAL_NAME:-${MODEL}_airbrain_${REPO_ID}_$(date +%Y%m%d_%H%M%S)}"
 JOB_NAME="${JOB_NAME:-${REPO_SLUG}-${MODEL}-$(date +%Y%m%d-%H%M%S)}"
 
-command="MODEL_GPU=1 SIM_GPU=0 EVAL_NAME=${EVAL_NAME} REPO_ID=${REPO_ID} MAX_SAMPLES=${MAX_SAMPLES} bash ${UAVEVAL_ROOT}/scripts/model_dlc_worker.sh ${MODEL}"
+quote_arg() {
+  local value="$1"
+  printf "'%s'" "$(printf "%s" "$value" | sed "s/'/'\\''/g")"
+}
+
+worker_command="cd $(quote_arg "${UAVEVAL_ROOT}") && MODEL_GPU=1 SIM_GPU=0 EVAL_NAME=$(quote_arg "${EVAL_NAME}") REPO_ID=$(quote_arg "${REPO_ID}") MAX_SAMPLES=$(quote_arg "${MAX_SAMPLES}") bash $(quote_arg "${UAVEVAL_ROOT}/scripts/model_dlc_worker.sh") $(quote_arg "${MODEL}")"
+command="bash -lc $(quote_arg "set -e; ${worker_command}")"
 echo "Submitting ${JOB_NAME}"
 echo "Evaluation results: /mnt/petrelfs/youzhongrui/v2/AirBrain/eval_results/${EVAL_NAME}"
 "${DLC_BIN}" submit pytorchjob \
