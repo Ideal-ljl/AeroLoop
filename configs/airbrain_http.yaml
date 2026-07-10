@@ -1,0 +1,36 @@
+benchmark:
+  source: airbrain
+  eval_config: /mnt/petrelfs/youzhongrui/v2/AirBrain/dataset/test_data_fixed_100_no_gzday_traj271.json
+  repo_id: null
+  max_samples: 100
+
+environment:
+  type: airbrain
+  kwargs:
+    airbrain_root: /mnt/petrelfs/youzhongrui/v2/AirBrain
+    color_order: bgr
+    collision_check: true
+
+# Run each model in its own environment and expose the canonical HTTP contract.
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18080/v1/predict
+    reset_url: http://127.0.0.1:18080/v1/reset
+    timeout_s: 120
+
+rollout:
+  max_steps: 200
+  execution_horizon: 1
+  stop_threshold: 0.5
+  terminate_on_collision: true
+  execute_motion_on_stop: false
+
+metrics:
+  success_distance: 25
+  distance_mode: legacy_min
+  require_stop_for_success: false
+
+output:
+  jsonl: eval_results/airbrain_http.jsonl
+  include_steps: true
