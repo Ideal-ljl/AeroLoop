@@ -93,6 +93,13 @@ class WorldVLNProxyBackend(ModelBackend):
         response = self._request("POST", "/v1/predict_delta_actions", payload)
         rows = response.get("actions") or []
         if not rows:
+            if response.get("done"):
+                # The native server signals exhaustion after its final frame
+                # with an empty action list.  Translate that protocol-level
+                # terminal state into the canonical explicit stop action.
+                self.pending_actions.append([0.0, 0.0, 0.0, 0.0, 1.0])
+                self.pending_frames.clear()
+                return response
             raise RuntimeError(f"WorldVLN upstream emitted no action segment: {response}")
         self.pending_actions.extend(self._canonicalize_chunk(rows))
         self.pending_frames.clear()

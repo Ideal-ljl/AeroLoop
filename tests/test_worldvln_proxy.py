@@ -40,6 +40,14 @@ class UpstreamHandler(BaseHTTPRequestHandler):
         pass
 
 
+class DoneUpstreamHandler(UpstreamHandler):
+    def do_POST(self):  # noqa: N802
+        size = int(self.headers.get("Content-Length", 0))
+        payload = json.loads(self.rfile.read(size))
+        self.__class__.calls.append(payload)
+        self._send({"actions": [], "segment_index": -1, "done": True})
+
+
 def predict_request(step):
     return PredictRequest("ep", "mock", "go", step, (0, 0, 0, 0), (0, 0, 0, 0), f"frame-{step}")
 
@@ -64,6 +72,22 @@ class WorldVLNProxyTest(unittest.TestCase):
             self.assertTrue(first["metadata"]["native_replan"])
             self.assertFalse(second["metadata"]["native_replan"])
             self.assertTrue(third["metadata"]["native_replan"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_native_done_without_actions_becomes_explicit_stop(self):
+        DoneUpstreamHandler.calls = []
+        server = ThreadingHTTPServer(("127.0.0.1", 0), DoneUpstreamHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            backend = WorldVLNProxyBackend(f"http://127.0.0.1:{server.server_port}")
+            backend.reset("ep", "go", "mock")
+            result = backend.predict(predict_request(0))
+            self.assertEqual(result["actions"], [[0.0, 0.0, 0.0, 0.0, 1.0]])
+            self.assertTrue(result["metadata"]["native_replan"])
+            self.assertTrue(result["metadata"]["upstream"]["done"])
         finally:
             server.shutdown()
             server.server_close()
