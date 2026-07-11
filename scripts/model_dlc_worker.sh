@@ -15,6 +15,7 @@ EVAL_NAME="${EVAL_NAME:-${MODEL}_airbrain_env_airsim_16}"
 REPO_ID="${REPO_ID:-env_airsim_16}"
 MAX_SAMPLES="${MAX_SAMPLES:-100}"
 MODEL_ONLY_SMOKE="${MODEL_ONLY_SMOKE:-false}"
+AERIAL_DIAGNOSTIC_ONLY="${AERIAL_DIAGNOSTIC_ONLY:-false}"
 RESULT_ROOT="${RESULT_ROOT:-${AIRBRAIN_ROOT}/eval_results/${EVAL_NAME}}"
 MODEL_GPU="${MODEL_GPU:-1}"
 SIM_GPU="${SIM_GPU:-0}"
@@ -54,6 +55,30 @@ case "${MODEL}" in
 esac
 
 mkdir -p "${RESULT_ROOT}"
+
+if [[ "${MODEL}" == "aerialvla" && "${AERIAL_DIAGNOSTIC_ONLY}" == "true" ]]; then
+  diagnostic_root="${RESULT_ROOT}/diagnostic"
+  mkdir -p "${diagnostic_root}"
+  cp "${AB_EX_ROOT}/AerialVLA/src/aerialvla_action_codec.py" "${diagnostic_root}/"
+  cp "${AB_EX_ROOT}/AerialVLA/src/train_openfly_lerobot.py" "${diagnostic_root}/"
+  {
+    echo "[base]"
+    find "${AB_EX_ROOT}/ckpt/AerialVLA/openvla-7b" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+    echo "[lora]"
+    find "${AB_EX_ROOT}/ckpt/AerialVLA/lora" -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+  } >"${diagnostic_root}/checkpoint_files.txt"
+  for root in "${AB_EX_ROOT}/ckpt/AerialVLA/openvla-7b" "${AB_EX_ROOT}/ckpt/AerialVLA/lora"; do
+    label="$(basename "${root}")"
+    for name in tokenizer_config.json special_tokens_map.json added_tokens.json adapter_config.json config.json; do
+      if [[ -f "${root}/${name}" ]]; then
+        cp "${root}/${name}" "${diagnostic_root}/${label}_${name}"
+      fi
+    done
+  done
+  echo "[model-worker] AerialVLA diagnostic assets: ${diagnostic_root}"
+  exit 0
+fi
+
 SERVER_LOG="${RESULT_ROOT}/${MODEL}_server.log"
 server_pid=""
 cleanup() {
