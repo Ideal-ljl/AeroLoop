@@ -69,7 +69,7 @@ if [[ "${MODEL}" == "aerialvla" && "${AERIAL_DIAGNOSTIC_ONLY}" == "true" ]]; the
   } >"${diagnostic_root}/checkpoint_files.txt"
   for root in "${AB_EX_ROOT}/ckpt/AerialVLA/openvla-7b" "${AB_EX_ROOT}/ckpt/AerialVLA/lora"; do
     label="$(basename "${root}")"
-    for name in tokenizer_config.json special_tokens_map.json added_tokens.json adapter_config.json config.json; do
+    for name in tokenizer_config.json tokenizer.json tokenizer.model special_tokens_map.json added_tokens.json adapter_config.json config.json; do
       if [[ -f "${root}/${name}" ]]; then
         cp "${root}/${name}" "${diagnostic_root}/${label}_${name}"
       fi
