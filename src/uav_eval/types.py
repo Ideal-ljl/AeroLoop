@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Mapping, Sequence
 
+from .cameras import CameraSpec
+
 
 def _finite(name: str, value: float) -> float:
     value = float(value)
@@ -106,6 +108,38 @@ class Observation:
     step_index: int
     timestamp: float = field(default_factory=time.time)
     info: Mapping[str, Any] = field(default_factory=dict)
+    images: Mapping[str, Any] = field(default_factory=dict)
+    primary_view: str = "front"
+    auxiliary_state: Mapping[str, Any] = field(default_factory=dict)
+    camera_specs: Mapping[str, CameraSpec] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        images = {str(name): image for name, image in self.images.items()}
+        rgb = self.rgb
+        primary_view = str(self.primary_view)
+        if rgb is not None:
+            images[primary_view] = rgb
+        elif images:
+            if primary_view not in images:
+                primary_view = next(iter(images))
+            rgb = images[primary_view]
+        object.__setattr__(self, "rgb", rgb)
+        object.__setattr__(self, "images", images)
+        object.__setattr__(self, "primary_view", primary_view)
+
+    def image(self, view: str | None = None) -> Any:
+        """Return a named view, or the primary compatibility RGB image."""
+
+        if view is None:
+            return self.rgb
+        try:
+            return self.images[view]
+        except KeyError as exc:
+            raise KeyError(f"view {view!r} is unavailable; available views: {sorted(self.images)}") from exc
+
+    @property
+    def available_views(self) -> tuple[str, ...]:
+        return tuple(self.images)
 
 
 @dataclass(frozen=True)
@@ -115,6 +149,7 @@ class PolicyInput:
     image_history: tuple[Any, ...] = ()
     action_history: tuple[CanonicalAction, ...] = ()
     state_history: tuple[tuple[float, float, float, float], ...] = ()
+    view_history: tuple[Mapping[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)

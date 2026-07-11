@@ -1,10 +1,42 @@
 from __future__ import annotations
 
+import math
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Mapping
+from numbers import Real
+from typing import Any, Mapping, Sequence
 
 from .geometry import distance
-from .types import EpisodeSpec, Pose, TerminationReason
+from .types import CanonicalAction, EpisodeSpec, Pose, TerminationReason
+
+
+class Metric(ABC):
+    """Lifecycle for a user-defined per-episode metric.
+
+    Metric output is namespaced as ``<name>/<key>`` so third-party metrics
+    cannot accidentally overwrite benchmark metrics.
+    """
+
+    name = "custom"
+
+    @abstractmethod
+    def reset(self, episode: EpisodeSpec) -> None:
+        pass
+
+    def update(
+        self,
+        before: Pose,
+        after: Pose,
+        *,
+        action: CanonicalAction,
+        collision: bool,
+        info: Mapping[str, Any],
+    ) -> None:
+        pass
+
+    @abstractmethod
+    def finalize(self, termination: TerminationReason, final_pose: Pose, step_count: int) -> Mapping[str, Any]:
+        pass
 
 
 @dataclass(frozen=True)
@@ -99,6 +131,54 @@ class EpisodeMetrics:
         }
 
 
+class MetricSuite:
+    """Built-in benchmark metrics plus isolated third-party metrics."""
+
+    def __init__(self, episode: EpisodeSpec, config: MetricConfig, custom: Sequence[Metric] = ()):
+        self.episode = episode
+        self.builtin = EpisodeMetrics(episode, config)
+        self.custom = tuple(custom)
+        names = [metric.name for metric in self.custom]
+        if any(not str(name).strip() for name in names):
+            raise ValueError("custom metric names cannot be empty")
+        if len(set(names)) != len(names):
+            raise ValueError(f"custom metric names must be unique, got {names}")
+
+    def reset(self) -> None:
+        for metric in self.custom:
+            metric.reset(self.episode)
+
+    def update(
+        self,
+        before: Pose,
+        after: Pose,
+        *,
+        action: CanonicalAction,
+        collision: bool,
+        info: Mapping[str, Any],
+    ) -> dict[str, float]:
+        distances = self.builtin.update(before, after, collision=collision, info=info)
+        for metric in self.custom:
+            metric.update(before, after, action=action, collision=collision, info=info)
+        return distances
+
+    def add_inference(self, elapsed_ms: float) -> None:
+        self.builtin.add_inference(elapsed_ms)
+
+    def finalize(self, termination: TerminationReason, final_pose: Pose, step_count: int) -> dict[str, Any]:
+        values = self.builtin.finalize(termination, final_pose, step_count)
+        for metric in self.custom:
+            output = metric.finalize(termination, final_pose, step_count)
+            if not isinstance(output, Mapping):
+                raise TypeError(f"metric {metric.name!r} finalize() must return a mapping")
+            for key, value in output.items():
+                values[f"{metric.name}/{key}"] = value
+        return values
+
+    def finalize_builtin(self, termination: TerminationReason, final_pose: Pose, step_count: int) -> dict[str, Any]:
+        return self.builtin.finalize(termination, final_pose, step_count)
+
+
 def aggregate_results(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {"type": "summary", "total_samples": 0}
@@ -107,6 +187,11 @@ def aggregate_results(rows: list[Mapping[str, Any]]) -> dict[str, Any]:
     for key in means:
         values = [float(row[key]) for row in rows if row.get(key) is not None]
         summary[key] = sum(values) / len(values) if values else 0.0
+    custom_keys = sorted({key for row in rows for key in row if "/" in key})
+    for key in custom_keys:
+        values = [float(row[key]) for row in rows if isinstance(row.get(key), Real) and math.isfinite(float(row[key]))]
+        if values:
+            summary[key] = sum(values) / len(values)
     summary["total_steps"] = sum(int(row.get("steps_taken", 0)) for row in rows)
     summary["total_inference_calls"] = sum(int(row.get("inference_calls", 0)) for row in rows)
     return summary

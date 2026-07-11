@@ -10,7 +10,8 @@ from pathlib import Path
 
 from .config import load_config
 from .episodes import load_airbrain_episodes, load_inline_episodes
-from .factories import build_environment, build_policy
+from .extensions import resolve_extension
+from .factories import build_custom_metrics, build_environment, build_policy
 from .metrics import MetricConfig, aggregate_results
 from .media import MediaConfig, MediaObserver
 from .recording import JsonlRecorder
@@ -29,7 +30,9 @@ def _load_episodes(config: dict):
         )
     if source == "inline":
         return load_inline_episodes(benchmark.get("episodes", []))
-    raise KeyError(f"unknown benchmark source: {source}")
+    loader = resolve_extension(str(benchmark.get("entrypoint", source)), "uav_eval.episode_sources")
+    episodes = loader(**dict(benchmark.get("kwargs", {})))
+    return list(episodes)
 
 
 def run(config: dict) -> Path:
@@ -38,7 +41,9 @@ def run(config: dict) -> Path:
         raise ValueError("benchmark selected zero episodes")
     policy = build_policy(config.get("policy", {"type": "mock"}))
     rollout = RolloutConfig(**config.get("rollout", {}))
-    metric_config = MetricConfig(**config.get("metrics", {}))
+    metrics_cfg = dict(config.get("metrics", {}))
+    custom_metrics = build_custom_metrics(metrics_cfg.pop("custom", []))
+    metric_config = MetricConfig(**metrics_cfg)
     output_cfg = config.get("output", {})
     output_path = Path(output_cfg.get("jsonl", f"eval_results/run_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"))
     include_steps = bool(output_cfg.get("include_steps", True))
@@ -59,7 +64,14 @@ def run(config: dict) -> Path:
             environment = build_environment(config.get("environment", {"type": "mock"}), env_name)
             env_rows = []
             try:
-                runner = RolloutRunner(environment, policy, rollout, metric_config, observers=observers)
+                runner = RolloutRunner(
+                    environment,
+                    policy,
+                    rollout,
+                    metric_config,
+                    observers=observers,
+                    custom_metrics=custom_metrics,
+                )
                 for index, episode in enumerate(env_episodes, start=1):
                     print(f"[{env_name}] episode {index}/{len(env_episodes)}: {episode.episode_id}")
                     result = runner.run_episode(episode)
@@ -136,9 +148,7 @@ def main(argv: list[str] | None = None) -> None:
         if destination.exists():
             raise FileExistsError(f"refusing to overwrite existing config: {destination}")
         template = (
-            resources.files("uav_eval")
-            .joinpath("resources", f"{args.template}.yaml")
-            .read_text(encoding="utf-8")
+            resources.files("uav_eval").joinpath("resources", f"{args.template}.yaml").read_text(encoding="utf-8")
         )
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(template, encoding="utf-8")

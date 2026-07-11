@@ -1,260 +1,130 @@
 # UAVEval
 
-UAVEval is a model-agnostic closed-loop evaluation platform for UAV
-vision-language navigation. It separates simulator rendering, model inference,
-kinematic action execution, metrics, and recording so that policies with
-different runtimes and native action spaces can be compared under one protocol.
+UAVEval is an extensible closed-loop evaluation platform for UAV
+vision-language navigation. It gives simulators and models one small protocol,
+while keeping their heavyweight dependencies in separate environments.
 
-## Core protocol
+## What it standardizes
 
-The canonical observation contains:
+- observation: instruction, named RGB views, world pose, start-relative state,
+  and optional model-specific state;
+- action: `[dx_body, dy_body, dz_body, d_yaw, stop_probability]`;
+- rollout: collision/stop handling and fair action-chunk execution;
+- evaluation: SR, SPL, OSR, distances, latency, JSONL traces, and optional video.
 
-- current RGB `uint8` image;
-- absolute world pose `[x, y, z, yaw]`;
-- start-frame-relative state `[x, y, z, yaw]`;
-- instruction and episode metadata;
-- optional image/action/state history managed by the rollout engine.
+Environments, policies, episode sources, metrics, observers, and camera layouts
+are replaceable. Existing four-column actions `[dx,dy,dz,stop]` and the legacy
+single `observation.rgb` view remain supported.
 
-The canonical action is:
-
-```text
-[dx_body, dy_body, dz_body, d_yaw, stop_probability]
-```
-
-Translation is expressed in the drone body frame. Strafing does not change
-yaw; heading changes only through `d_yaw`. Four-column OpenFly actions
-`[dx,dy,dz,stop]` remain accepted and imply `d_yaw=0`.
-
-## Architecture
-
-```text
-Episode source ─┐
-                v
-          RolloutRunner <──── PolicyAdapter (local / HTTP / plugin)
-                │
-                v
-       EnvironmentAdapter (AirSim / GS-AirSim / UE / mock)
-                │
-                ├── MetricSuite: SR, SPL, OSR, collision, stop, distances
-                └── JSONL recorder: run config, episode traces, summaries
-```
-
-Model and simulator dependencies are deliberately not imported by the core
-package. A model can run in its own conda environment behind the canonical HTTP
-interface.
-
-## Quick smoke test
-
-No NumPy, PyTorch, simulator, or GPU is required for the mock run:
-
-```bash
-cd /mnt/petrelfs/youzhongrui/v2/UAVEval
-PYTHONPATH=src python -m unittest discover -s tests -v
-rm -rf eval_results
-PYTHONPATH=src python -m uav_eval run --config configs/mock.yaml
-```
-
-Install as a package when the environment has a working pip:
+## Install and run
 
 ```bash
 pip install -e .
 uav-eval run --config configs/mock.yaml
 ```
 
-For live visualization and MP4 output:
+The mock run needs no simulator, GPU, NumPy, or PyTorch. Optional features:
 
 ```bash
-pip install -e '.[media]'
+pip install -e '.[media]'     # OpenCV visualization and MP4 output
+pip install -e '.[airbrain]'  # AirBrain runtime helpers
 uav-eval doctor
-uav-eval init-config --template airbrain-http --output uav_eval.yaml
 ```
 
-The `media` extra provides NumPy and OpenCV. MP4 streaming additionally uses
-the system `ffmpeg` executable. Full AirBrain environments can use:
-
-```bash
-pip install -e '.[airbrain]'
-```
-
-## AirBrain evaluation
-
-The AirBrain adapter reuses `scripts/env_bridge.py`, including the AirSim,
-GS-AirSim, UnrealCV, point-cloud surface-distance, and collision components.
-UAVEval owns pose integration and always feeds models state in dataset units;
-the GS `pcd_scale_ratio` is applied only when setting renderer pose.
-
-Edit `configs/airbrain_http.yaml`, start a model service, then run:
-
-```bash
-PYTHONPATH=src python -m uav_eval run --config configs/airbrain_http.yaml
-```
-
-The default config uses the same AirBrain test set as `test_full_his.py`:
-`dataset/test_data_fixed_100_no_gzday_traj271.json`. It contains 1,100
-episodes—100 episodes in each of 11 environments. Validate the resolved paths
-and selection without starting a simulator:
-
-```bash
-uav-eval inspect-airbrain \
-  --eval-config /mnt/petrelfs/youzhongrui/v2/AirBrain/dataset/test_data_fixed_100_no_gzday_traj271.json
-```
-
-`benchmark.max_samples` follows AirBrain semantics and is applied per
-environment, rather than globally.
-
-The AirBrain runtime additionally needs its normal simulator dependencies such
-as NumPy, OpenCV, Open3D, AirSim/UnrealCV, and the environment assets.
-
-## Visualization and video
-
-Media output is configured independently of the model and simulator:
+## Configuration
 
 ```yaml
-media:
-  show_window: true
-  window_name: UAVEval AirBrain
-  wait_ms: 1
-  overlay: true
-  save_video: true
-  video_dir: eval_results/videos
-  video_fps: 10
-  ffmpeg_bin: ffmpeg
-  save_collision_frame: true
-  collision_dir: eval_results/collisions
+benchmark:
+  source: inline
+  episodes:
+    - episode_id: demo
+      env_name: mock
+      instruction: Fly to the target.
+      target_position: [10, 0, 0]
+
+environment:
+  type: mock
+  kwargs:
+    cameras: standard  # front, back, left, right, down
+
+policy:
+  type: mock
+  kwargs:
+    action: [1, 0, 0, 0, 0]
+
+rollout:
+  max_steps: 200
+  execution_horizon: 1  # null consumes each model's native action chunk
+
+metrics:
+  success_distance: 25
+  distance_mode: endpoint_3d
 ```
 
-The window displays the current RGB observation with action, pose, distance,
-collision, chunk index, and inference latency. Press `Space` to pause/resume;
-press `q` or `Esc` to end the current episode cleanly. Videos are streamed to
-H.264 MP4 one frame at a time, so long evaluations do not keep all frames in
-RAM. Video and collision-image paths are included in the episode's `artifacts`
-field in the JSONL output.
+Use `cameras: standard`, a list of standard names, or custom body-relative
+camera definitions:
 
-On a headless node set `show_window: false`; video saving continues to work.
-
-## HTTP policy contract
-
-`POST /v1/reset` receives:
-
-```json
-{
-  "episode_id": "env:episode",
-  "env_name": "env_airsim_18",
-  "instruction": "fly toward the gray tower"
-}
+```yaml
+cameras:
+  - front
+  - name: gimbal
+    position: [0.2, 0, -0.1]
+    yaw_degrees: 30
+    pitch_degrees: -25
+    fov: 90
 ```
 
-`POST /v1/predict` receives:
+An HTTP model selects only the views it needs; the environment must render
+those names:
 
-```json
-{
-  "episode_id": "env:episode",
-  "env_name": "env_airsim_18",
-  "instruction": "fly toward the gray tower",
-  "step": 0,
-  "state": [0.0, 0.0, 0.0, 0.0],
-  "pose": [12.0, 8.0, 5.0, 1.57],
-  "image_base64": "<PNG>",
-  "image_format": "png_rgb"
-}
+```yaml
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18080/v1/predict
+    reset_url: http://127.0.0.1:18080/v1/reset
+    views: [front, down]
 ```
 
-The response must contain a non-empty action chunk:
+## Architecture
 
-```json
-{
-  "actions": [
-    [0.5, 0.0, 0.0, 0.0, 0.0],
-    [0.5, 0.0, 0.0, 0.0, 0.0]
-  ],
-  "metadata": {"model": "example", "native_chunk_size": 2}
-}
+```text
+Episode source ──> RolloutRunner <── Policy (local / HTTP / plugin)
+                         │
+                         v
+                 Environment (simulator / plugin)
+                         │
+                  metrics + observers
+                         │
+                  JSONL + media artifacts
 ```
 
-Four-column rows `[dx,dy,dz,stop]` are also accepted. Each model service is
-responsible for converting native outputs, units, coordinate conventions, and
-stop semantics into the canonical action.
+Real models should normally run behind the HTTP boundary in their own conda
+environment. UAVEval includes adapters for AerialVLA, OpenUAV, DualVLN, and
+WorldVLN; see [model server setup](docs/MODEL_SERVERS.md).
 
-A dependency-free reference server is included:
+## Extend UAVEval
+
+A component can be referenced directly as `package.module:Object`, or published
+through these Python entry-point groups:
+
+- `uav_eval.environments`
+- `uav_eval.policies`
+- `uav_eval.episode_sources`
+- `uav_eval.metrics`
+
+The stable interfaces are `EnvironmentAdapter`, `PolicyAdapter`, `Metric`, and
+`RolloutObserver`. See [extension guide](docs/EXTENDING.md) for minimal working
+implementations and [HTTP API](docs/HTTP_API.md) for multi-view requests.
+
+## Development
 
 ```bash
-python examples/mock_http_server.py --port 18080
+PYTHONPATH=src python -m unittest discover -s tests -v
+ruff check src tests
 ```
 
-## Fair chunk execution
-
-`rollout.execution_horizon` controls how much of each predicted chunk is used:
-
-- `1`: observe and replan every action; recommended for the primary comparison;
-- positive `K`: execute at most K actions before replanning;
-- `null`: consume the model's complete native chunk open-loop.
-
-Discarded actions are not carried into the next inference call.
-
-## Metrics
-
-Every episode records endpoint 2D/3D distance, building-center 2D distance,
-point-cloud surface distance, collision, stop behavior, inference latency, path
-length, SR, SPL, and OSR. The main success distance can be configured as:
-
-- `endpoint_2d`
-- `endpoint_3d`
-- `surface`
-- `legacy_min` (compatibility with `test_full_his.py`)
-
-Stop is reported independently as `stop_called`, `stop_success`, and
-`premature_stop`. `require_stop_for_success` controls whether SR requires an
-explicit stop.
-
-## Policy adapters
-
-- `mock`: deterministic dependency-free integration test.
-- `http`: recommended boundary for real models in different conda envs.
-- `plugin`: loads `python.module:ClassName` implementing `reset()` and
-  `predict()`.
-- `ckpt_harness`: compatibility with `Ab_ex/ckpt/harness`; concrete wrappers
-  must be repaired and validated before benchmark use.
-
-The next integration layer should provide one HTTP server per AerialVLA,
-DualVLN, OpenUAV, and WorldVLN environment. The benchmark runner and simulator
-do not change when a new model is added.
-
-## Python API
-
-Applications can use the package without the CLI:
-
-```python
-from uav_eval import MetricConfig, RolloutConfig, RolloutRunner
-from uav_eval.media import MediaConfig, MediaObserver
-
-observer = MediaObserver(MediaConfig(show_window=True, save_video=True))
-runner = RolloutRunner(
-    environment=my_environment,
-    policy=my_policy,
-    rollout=RolloutConfig(execution_horizon=1),
-    metrics=MetricConfig(distance_mode="endpoint_3d"),
-    observers=[observer],
-)
-result = runner.run_episode(episode)
-observer.close()
-```
-
-`EnvironmentAdapter`, `PolicyAdapter`, and `RolloutObserver` are stable public
-extension points for downstream packages.
-
-## Model HTTP services
-
-UAVEval includes canonical servers for AerialVLA, OpenUAV, DualVLN, and a
-WorldVLN native-service proxy. Install this package into each model's conda
-environment, then use `uav-model-server` or the launch scripts under `scripts/`.
-
-```bash
-uav-model-server --help
-bash scripts/serve_aerialvla.sh
-bash scripts/serve_openuav.sh
-bash scripts/serve_dualvln.sh
-bash scripts/serve_worldvln_proxy.sh
-```
-
-See [docs/MODEL_SERVERS.md](docs/MODEL_SERVERS.md) for checkpoint requirements,
-ports, health checks, native action conversions, and WorldVLN segment caching.
+Output rows are documented in [the JSONL schema](docs/OUTPUT_SCHEMA.md). Before
+benchmarking a new model, complete the [adapter checklist](docs/MODEL_ADAPTER_CHECKLIST.md).
+Contributions are described in [CONTRIBUTING.md](CONTRIBUTING.md); the project
+is licensed under [Apache-2.0](LICENSE).

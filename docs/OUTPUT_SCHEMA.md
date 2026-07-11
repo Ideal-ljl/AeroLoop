@@ -14,3 +14,8 @@ call/action indices, latency, and model metadata.
 
 Non-finite optional distances are serialized as JSON `null`, never as the
 non-standard `Infinity` literal.
+
+Custom metric values use `<metric-name>/<field>` keys (for example,
+`energy/total`) so extensions cannot overwrite the standard benchmark fields.
+Numeric custom fields are averaged into environment and overall summaries;
+non-numeric fields remain episode-level metadata.

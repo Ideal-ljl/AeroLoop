@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import importlib.util
+import math
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from ..cameras import CameraSpec, resolve_cameras
 from ..geometry import apply_body_action, relative_state
 from ..protocols import EnvironmentAdapter
 from ..types import CanonicalAction, EpisodeSpec, Observation, Transition
@@ -30,6 +33,7 @@ class AirBrainEnvironment(EnvironmentAdapter):
         collision_check: bool = True,
         collision_voxel_width: float = 0.2,
         settle_seconds: float = 0.05,
+        cameras: Any = "front",
     ):
         self.env_name = env_name
         self.root = Path(airbrain_root).resolve()
@@ -40,6 +44,7 @@ class AirBrainEnvironment(EnvironmentAdapter):
         self.collision_check = collision_check
         self.collision_voxel_width = float(collision_voxel_width)
         self.settle_seconds = float(settle_seconds)
+        self.camera_specs = resolve_cameras(cameras)
         self._bridge = None
         self._processor = None
         self._surface_checker = None
@@ -123,16 +128,43 @@ class AirBrainEnvironment(EnvironmentAdapter):
                 dilate_radius=0.0,
             )
         self.pos_ratio = self._load_pos_ratio()
+        resolved_cameras = []
+        for camera in self.camera_specs:
+            width = getattr(self._bridge, "camera_width", None)
+            height = getattr(self._bridge, "camera_height", None)
+            fov = getattr(self._bridge, "camera_fov", None)
+            if camera.width is not None and width is not None and camera.width != int(width):
+                raise ValueError(f"camera {camera.name} requests width={camera.width}, renderer provides {width}")
+            if camera.height is not None and height is not None and camera.height != int(height):
+                raise ValueError(f"camera {camera.name} requests height={camera.height}, renderer provides {height}")
+            if camera.fov is not None and fov is not None and not math.isclose(camera.fov, float(fov)):
+                raise ValueError(f"camera {camera.name} requests fov={camera.fov}, renderer provides {fov}")
+            resolved_cameras.append(
+                replace(
+                    camera,
+                    width=camera.width if camera.width is not None else width,
+                    height=camera.height if camera.height is not None else height,
+                    fov=camera.fov if camera.fov is not None else fov,
+                )
+            )
+        self.camera_specs = tuple(resolved_cameras)
 
-    def _set_pose(self) -> None:
-        pitch = float(self.episode.metadata.get("pitch", 0.0))
+    def _set_pose(self, camera: CameraSpec | None = None) -> None:
+        camera = camera or self.camera_specs[0]
+        offset_x, offset_y, offset_z = camera.position
+        cos_yaw = math.cos(self.pose.yaw)
+        sin_yaw = math.sin(self.pose.yaw)
+        x = self.pose.x + offset_x * cos_yaw - offset_y * sin_yaw
+        y = self.pose.y + offset_x * sin_yaw + offset_y * cos_yaw
+        z = self.pose.z + offset_z
+        pitch = float(self.episode.metadata.get("pitch", 0.0)) + math.degrees(camera.pitch)
         self._bridge.set_camera_pose(
-            self.pose.x / self.pos_ratio,
-            self.pose.y / self.pos_ratio,
-            self.pose.z / self.pos_ratio,
+            x / self.pos_ratio,
+            y / self.pos_ratio,
+            z / self.pos_ratio,
             pitch,
-            self.pose.yaw * 180.0 / 3.141592653589793,
-            0.0,
+            math.degrees(self.pose.yaw + camera.yaw),
+            math.degrees(camera.roll),
         )
         if self.settle_seconds > 0:
             time.sleep(self.settle_seconds)
@@ -144,13 +176,25 @@ class AirBrainEnvironment(EnvironmentAdapter):
                 image = image[..., ::-1].copy()
         return image
 
+    def _images(self) -> dict[str, Any]:
+        images = {}
+        for camera in self.camera_specs:
+            self._set_pose(camera)
+            images[camera.name] = self._rgb()
+        return images
+
     def _observation(self, info: dict[str, Any] | None = None) -> Observation:
+        images = self._images()
+        primary_view = self.camera_specs[0].name
         return Observation(
-            rgb=self._rgb(),
+            rgb=images[primary_view],
             pose=self.pose,
             relative_state=relative_state(self.pose, self.origin),
             step_index=self.step,
             info=info or {},
+            images=images,
+            primary_view=primary_view,
+            camera_specs={camera.name: camera for camera in self.camera_specs},
         )
 
     def reset(self, episode: EpisodeSpec) -> Observation:
@@ -161,14 +205,12 @@ class AirBrainEnvironment(EnvironmentAdapter):
         self.origin = episode.start_pose
         self.pose = episode.start_pose
         self.step = 0
-        self._set_pose()
         return self._observation()
 
     def execute(self, action: CanonicalAction) -> Transition:
         before = self.pose
         self.pose = apply_body_action(before, action)
         self.step += 1
-        self._set_pose()
         collision = False
         if self._collision_checker is not None:
             collision = bool(self._collision_checker.is_collision(before.xyz(), self.pose.xyz()))

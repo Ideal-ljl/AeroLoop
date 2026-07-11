@@ -1,7 +1,6 @@
 import json
 import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib import error, request
 
 from uav_eval.policies.http import HttpPolicy
@@ -66,12 +65,8 @@ class ModelServerTest(unittest.TestCase):
             "base_model.model.model.mm_projector.weight": object(),
             "base_model.model.waypoints_fc.0.weight": object(),
         }
-        normalized = normalize_checkpoint_state(
-            state, {"model.mm_projector.weight", "waypoints_fc.0.weight"}
-        )
-        self.assertEqual(
-            set(normalized), {"model.mm_projector.weight", "waypoints_fc.0.weight"}
-        )
+        normalized = normalize_checkpoint_state(state, {"model.mm_projector.weight", "waypoints_fc.0.weight"})
+        self.assertEqual(set(normalized), {"model.mm_projector.weight", "waypoints_fc.0.weight"})
 
     def test_openuav_incomplete_checkpoint_is_detected(self):
         keys = ["model.mm_projector.weight", "model.vlm_att_query"]
@@ -83,6 +78,24 @@ class ModelServerTest(unittest.TestCase):
     def test_translation_heading_matches_airbrain_local_action(self):
         self.assertAlmostEqual(heading_delta_from_translation(1, 1), 0.7853981633974483)
         self.assertEqual(heading_delta_from_translation(0, 0), 0.0)
+
+    def test_predict_request_normalizes_legacy_and_named_views(self):
+        parsed = PredictRequest.from_mapping(
+            {
+                "episode_id": "ep",
+                "state": [0, 0, 0, 0],
+                "pose": [0, 0, 0, 0],
+                "image_base64": "front-data",
+                "images_base64": {"down": "down-data"},
+                "primary_view": "front",
+                "auxiliary_state": {"speed": 2},
+                "camera_specs": {"front": {"width": 640, "height": 480}},
+            }
+        )
+        self.assertEqual(parsed.available_views, ("down", "front"))
+        self.assertEqual(parsed.images_base64["front"], "front-data")
+        self.assertEqual(parsed.auxiliary_state["speed"], 2)
+        self.assertEqual(parsed.camera_specs["front"]["width"], 640)
 
 
 if __name__ == "__main__":

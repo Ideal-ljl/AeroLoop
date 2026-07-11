@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Sequence
 
-from .metrics import EpisodeMetrics, MetricConfig
+from .metrics import Metric, MetricConfig, MetricSuite
 from .protocols import EnvironmentAdapter, PolicyAdapter
 from .observers import RolloutObserver
 from .types import (
@@ -44,12 +44,14 @@ class RolloutRunner:
         rollout: RolloutConfig | None = None,
         metrics: MetricConfig | None = None,
         observers: Sequence[RolloutObserver] | None = None,
+        custom_metrics: Sequence[Metric] | None = None,
     ):
         self.environment = environment
         self.policy = policy
         self.rollout = rollout or RolloutConfig()
         self.metric_config = metrics or MetricConfig()
         self.observers = list(observers or [])
+        self.custom_metrics = list(custom_metrics or [])
 
     def _observer_call(self, method: str, *args):
         values = []
@@ -65,6 +67,7 @@ class RolloutRunner:
     def run_episode(self, episode: EpisodeSpec) -> EpisodeResult:
         records: list[StepRecord] = []
         image_history = []
+        view_history = []
         action_history: list[CanonicalAction] = []
         state_history = []
         queue: deque[tuple[CanonicalAction, int, int, float | None, dict]] = deque()
@@ -72,7 +75,7 @@ class RolloutRunner:
         termination = TerminationReason.MAX_STEPS
         error = None
 
-        tracker = EpisodeMetrics(episode, self.metric_config)
+        tracker = MetricSuite(episode, self.metric_config, self.custom_metrics)
         observation = Observation(
             rgb=None,
             pose=episode.start_pose,
@@ -81,12 +84,13 @@ class RolloutRunner:
         )
 
         try:
+            tracker.reset()
             self.policy.reset(episode)
             observation = self.environment.reset(episode)
             self._observer_call("on_episode_start", episode, observation)
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"
-            metrics = tracker.finalize(TerminationReason.ERROR, observation.pose, 0)
+            metrics = tracker.finalize_builtin(TerminationReason.ERROR, observation.pose, 0)
             return EpisodeResult(
                 episode_id=episode.episode_id,
                 env_name=episode.env_name,
@@ -105,6 +109,7 @@ class RolloutRunner:
                         image_history=tuple(image_history),
                         action_history=tuple(action_history),
                         state_history=tuple(state_history),
+                        view_history=tuple(view_history),
                     )
                     started = time.perf_counter()
                     chunk = self.policy.predict(policy_input)
@@ -115,7 +120,15 @@ class RolloutRunner:
                     if self.rollout.execution_horizon is not None:
                         actions = actions[: self.rollout.execution_horizon]
                     for action_index, action in enumerate(actions):
-                        queue.append((action, inference_call, action_index, elapsed_ms if action_index == 0 else None, dict(chunk.metadata)))
+                        queue.append(
+                            (
+                                action,
+                                inference_call,
+                                action_index,
+                                elapsed_ms if action_index == 0 else None,
+                                dict(chunk.metadata),
+                            )
+                        )
 
                 action, call_index, action_index, inference_ms, policy_metadata = queue.popleft()
                 stop_requested = action.stop >= self.rollout.stop_threshold
@@ -127,23 +140,30 @@ class RolloutRunner:
                 before = before_observation.pose
                 transition = self.environment.execute(effective_action)
                 observation = transition.observation
-                distances = tracker.update(before, observation.pose, collision=transition.collision, info=transition.info)
+                distances = tracker.update(
+                    before,
+                    observation.pose,
+                    action=effective_action,
+                    collision=transition.collision,
+                    info=transition.info,
+                )
                 self.policy.on_action_executed(effective_action, transition)
 
                 record = StepRecord(
-                        step=step,
-                        inference_call=call_index,
-                        action_index=action_index,
-                        action=action,
-                        pose_before=before,
-                        pose_after=observation.pose,
-                        collision=transition.collision,
-                        inference_ms=inference_ms,
-                        distances=distances,
-                        policy_metadata=policy_metadata,
-                    )
+                    step=step,
+                    inference_call=call_index,
+                    action_index=action_index,
+                    action=action,
+                    pose_before=before,
+                    pose_after=observation.pose,
+                    collision=transition.collision,
+                    inference_ms=inference_ms,
+                    distances=distances,
+                    policy_metadata=policy_metadata,
+                )
                 records.append(record)
                 image_history.append(before_observation.rgb)
+                view_history.append(dict(before_observation.images))
                 action_history.append(effective_action)
                 state_history.append(before_observation.relative_state)
 
@@ -164,7 +184,13 @@ class RolloutRunner:
             termination = TerminationReason.ERROR
             error = f"{type(exc).__name__}: {exc}"
 
-        metrics = tracker.finalize(termination, observation.pose, len(records))
+        try:
+            metrics = tracker.finalize(termination, observation.pose, len(records))
+        except Exception as exc:
+            termination = TerminationReason.ERROR
+            metric_error = f"metric finalize failed: {type(exc).__name__}: {exc}"
+            error = f"{error}; {metric_error}" if error else metric_error
+            metrics = tracker.finalize_builtin(termination, observation.pose, len(records))
         result = EpisodeResult(
             episode_id=episode.episode_id,
             env_name=episode.env_name,

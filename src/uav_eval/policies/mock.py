@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from ..protocols import PolicyAdapter
-from ..types import ActionChunk, CanonicalAction, EpisodeSpec, PolicyInput
+from ..types import ActionChunk, EpisodeSpec, PolicyInput
 
 
 @dataclass

@@ -2,7 +2,8 @@
 
 __version__ = "0.1.0"
 
-from .metrics import MetricConfig
+from .metrics import Metric, MetricConfig
+from .cameras import CameraSpec, STANDARD_CAMERAS, resolve_cameras
 from .media import MediaConfig, MediaObserver
 from .protocols import EnvironmentAdapter, PolicyAdapter
 from .observers import RolloutObserver
@@ -12,11 +13,13 @@ from .types import ActionChunk, CanonicalAction, EpisodeResult, EpisodeSpec, Obs
 __all__ = [
     "ActionChunk",
     "CanonicalAction",
+    "CameraSpec",
     "EnvironmentAdapter",
     "EpisodeResult",
     "EpisodeSpec",
     "MediaConfig",
     "MediaObserver",
+    "Metric",
     "MetricConfig",
     "Observation",
     "PolicyAdapter",
@@ -24,4 +27,6 @@ __all__ = [
     "RolloutConfig",
     "RolloutObserver",
     "RolloutRunner",
+    "STANDARD_CAMERAS",
+    "resolve_cameras",
 ]

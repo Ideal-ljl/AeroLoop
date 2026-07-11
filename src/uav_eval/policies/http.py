@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from typing import Sequence
 from urllib import request
 
 from ..protocols import PolicyAdapter
@@ -37,7 +38,16 @@ class HttpPolicy(PolicyAdapter):
     url: str
     timeout_s: float = 120.0
     reset_url: str | None = None
+    views: Sequence[str] | None = None
+    primary_view: str = "front"
     name: str = "http"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.views, str):
+            self.views = (self.views,)
+        elif self.views is not None:
+            self.views = tuple(str(view) for view in self.views)
+        self.primary_view = str(self.primary_view)
 
     def _post(self, url: str, payload: dict) -> dict:
         body = json.dumps(payload).encode("utf-8")
@@ -55,6 +65,18 @@ class HttpPolicy(PolicyAdapter):
 
     def predict(self, policy_input: PolicyInput) -> ActionChunk:
         obs = policy_input.observation
+        available = dict(obs.images)
+        if not available and obs.rgb is not None:
+            available[obs.primary_view] = obs.rgb
+        requested_views = self.views if self.views is not None else tuple(available)
+        missing = [view for view in requested_views if view not in available]
+        if missing:
+            raise ValueError(f"policy requires unavailable views {missing}; available views: {sorted(available)}")
+        encoded_views = {view: _encode_rgb_png(available[view]) for view in requested_views}
+        primary_view = self.primary_view if self.primary_view in encoded_views else obs.primary_view
+        if primary_view not in encoded_views and encoded_views:
+            primary_view = next(iter(encoded_views))
+        camera_specs = {view: obs.camera_specs[view].as_dict() for view in requested_views if view in obs.camera_specs}
         response = self._post(
             self.url,
             {
@@ -64,8 +86,12 @@ class HttpPolicy(PolicyAdapter):
                 "step": obs.step_index,
                 "state": list(obs.relative_state),
                 "pose": obs.pose.as_list(),
-                "image_base64": _encode_rgb_png(obs.rgb),
+                "auxiliary_state": dict(obs.auxiliary_state),
+                "image_base64": encoded_views.get(primary_view),
                 "image_format": "png_rgb",
+                "images_base64": encoded_views,
+                "primary_view": primary_view,
+                "camera_specs": camera_specs,
             },
         )
         rows = response.get("actions")

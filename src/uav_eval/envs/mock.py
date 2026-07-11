@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
+from ..cameras import CameraSpec, resolve_cameras
 from ..geometry import apply_body_action, distance, relative_state
 from ..protocols import EnvironmentAdapter
 from ..types import CanonicalAction, EpisodeSpec, Observation, Pose, Transition
@@ -12,7 +14,13 @@ class MockEnvironment(EnvironmentAdapter):
     """Dependency-free kinematic environment for tests and integration smoke runs."""
 
     collision_x: float | None = None
+    cameras: Any = "front"
+    image_factory: Callable[[CameraSpec, Pose, int], Any] | None = None
     name: str = "mock"
+    camera_specs: tuple[CameraSpec, ...] = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.camera_specs = resolve_cameras(self.cameras)
 
     def reset(self, episode: EpisodeSpec) -> Observation:
         self.episode = episode
@@ -22,12 +30,18 @@ class MockEnvironment(EnvironmentAdapter):
         return self._observation()
 
     def _observation(self) -> Observation:
+        images = {}
+        if self.image_factory is not None:
+            images = {camera.name: self.image_factory(camera, self.pose, self.step) for camera in self.camera_specs}
         return Observation(
-            rgb=None,
+            rgb=images.get(self.camera_specs[0].name),
             pose=self.pose,
             relative_state=relative_state(self.pose, self.origin),
             step_index=self.step,
             info={"mock": True},
+            images=images,
+            primary_view=self.camera_specs[0].name,
+            camera_specs={camera.name: camera for camera in self.camera_specs},
         )
 
     def execute(self, action: CanonicalAction) -> Transition:

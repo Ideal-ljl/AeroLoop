@@ -9,12 +9,14 @@ environment:
     airbrain_root: /path/to/AirBrain
     color_order: bgr
     collision_check: true
+    cameras: front
 policy:
   type: http
   kwargs:
     url: http://127.0.0.1:18080/v1/predict
     reset_url: http://127.0.0.1:18080/v1/reset
     timeout_s: 120
+    views: [front]
 rollout:
   max_steps: 200
   execution_horizon: 1
