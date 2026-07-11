@@ -19,13 +19,15 @@ class WorldVLNProxyBackend(ModelBackend):
         upstream_url: str = "http://127.0.0.1:8001",
         timeout_s: float = 600.0,
         action_head_mode: str = "tsformer_latent",
-        stop_speed_threshold: float = 0.005,
+        stop_speed_threshold: float = 0.5,
         allow_future_last_segment: bool = True,
     ):
         self.upstream_url = upstream_url.rstrip("/")
         self.timeout_s = float(timeout_s)
         self.action_head_mode = action_head_mode
         self.stop_speed_threshold = float(stop_speed_threshold)
+        if not math.isfinite(self.stop_speed_threshold) or self.stop_speed_threshold < 0:
+            raise ValueError("stop_speed_threshold must be a finite value in metres")
         self.allow_future_last_segment = bool(allow_future_last_segment)
         self.session_id = None
         self.episode_id = None
@@ -54,6 +56,9 @@ class WorldVLNProxyBackend(ModelBackend):
             "upstream": upstream,
             "native_segmented_execution": True,
             "action_head_mode": self.action_head_mode,
+            "action_frame": "body",
+            "stop_strategy": "mean speed of final three predicted actions",
+            "stop_speed_threshold_m": self.stop_speed_threshold,
         }
 
     def reset(self, episode_id: str, instruction: str, env_name: str):
@@ -127,6 +132,8 @@ class WorldVLNProxyBackend(ModelBackend):
             "actions": [action],
             "metadata": {
                 "model": self.name,
+                "action_frame": "body",
+                "stop_speed_threshold_m": self.stop_speed_threshold,
                 "native_replan": replanned,
                 "native_segment_index": self.segment_index,
                 "cached_actions_remaining": len(self.pending_actions),

@@ -6,6 +6,11 @@ from pathlib import Path
 from ..base import ModelBackend, PredictRequest
 
 
+def build_aerialvla_prompt(instruction: str) -> str:
+    """Build the exact prompt used by AerialVLA training."""
+    return f"<image>\n{instruction.strip()}\nAction: "
+
+
 class AerialVLABackend(ModelBackend):
     name = "aerialvla"
 
@@ -65,7 +70,9 @@ class AerialVLABackend(ModelBackend):
             "device": self.device,
             "dtype": self.dtype_name,
             "native_chunk_size": 1,
+            "action_frame": "body",
             "action_semantics": "[forward,0,down,d_yaw,LAND]",
+            "action_codec": "src.aerialvla_action_codec.parse_aerialvla_action_text",
         }
 
     def reset(self, episode_id: str, instruction: str, env_name: str):
@@ -79,7 +86,7 @@ class AerialVLABackend(ModelBackend):
             self.reset(request.episode_id, request.instruction, request.env_name)
         rgb = request.decode_rgb()
         image = Image.fromarray(rgb)
-        prompt = f"<image>\n{request.instruction.strip()}\nAction: "
+        prompt = build_aerialvla_prompt(request.instruction)
         text = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         pixels = self.image_processor(images=image, return_tensors="pt")["pixel_values"].to(
             self.device, dtype=self.model.dtype
@@ -101,6 +108,7 @@ class AerialVLABackend(ModelBackend):
             "actions": [action],
             "metadata": {
                 "model": self.name,
+                "action_frame": "body",
                 "raw_output": decoded,
                 "native_action": [float(forward), float(down), float(d_yaw), bool(stop)],
             },

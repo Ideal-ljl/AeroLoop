@@ -53,6 +53,25 @@ def predict_request(step):
 
 
 class WorldVLNProxyTest(unittest.TestCase):
+    def test_default_stop_threshold_is_half_a_metre(self):
+        backend = WorldVLNProxyBackend("http://127.0.0.1:1")
+        self.assertEqual(backend.stop_speed_threshold, 0.5)
+
+    def test_stop_threshold_is_applied_after_centimetres_to_metres_conversion(self):
+        backend = WorldVLNProxyBackend("http://127.0.0.1:1", stop_speed_threshold=0.5)
+        actions = backend._canonicalize_chunk(
+            [[40, 0, 0, 0, 0, 0], [30, 0, 0, 0, 0, 0], [20, 0, 0, 0, 0, 0]]
+        )
+        self.assertEqual(actions[-1][-1], 1.0)
+        self.assertEqual(actions[0][0], 0.4)
+
+    def test_motion_above_half_a_metre_does_not_stop(self):
+        backend = WorldVLNProxyBackend("http://127.0.0.1:1", stop_speed_threshold=0.5)
+        actions = backend._canonicalize_chunk(
+            [[60, 0, 0, 0, 0, 0], [70, 0, 0, 0, 0, 0], [80, 0, 0, 0, 0, 0]]
+        )
+        self.assertEqual(actions[-1][-1], 0.0)
+
     def test_reset_reuses_native_session_to_avoid_stream_accumulation(self):
         backend = WorldVLNProxyBackend("http://127.0.0.1:1")
         first = backend.reset("ep-1", "go", "mock")

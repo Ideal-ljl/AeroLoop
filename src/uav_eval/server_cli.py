@@ -46,7 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
     world.add_argument("--upstream-url", default="http://127.0.0.1:8001")
     world.add_argument("--timeout-s", type=float, default=600)
     world.add_argument("--action-head-mode", default="tsformer_latent")
-    world.add_argument("--stop-speed-threshold", type=float, default=0.005)
+    world.add_argument(
+        "--stop-speed-threshold",
+        type=float,
+        default=0.5,
+        help="stop when the final three predicted translations average below this many metres",
+    )
 
     return parser
 

@@ -45,6 +45,15 @@ def normalize_checkpoint_state(state: Mapping[str, object], model_keys: Iterable
     return normalized
 
 
+def waypoint_label_present(labels, waypoint_label_token: int) -> bool:
+    """Return whether training preprocess inserted the waypoint supervision token."""
+    matches = labels == waypoint_label_token
+    if hasattr(matches, "any"):
+        result = matches.any()
+        return bool(result.item() if hasattr(result, "item") else result)
+    return any(value == waypoint_label_token for row in labels for value in row)
+
+
 class OpenUAVBackend(ModelBackend):
     name = "openuav"
 
@@ -85,13 +94,19 @@ class OpenUAVBackend(ModelBackend):
             )
 
         from llamavid import conversation as conversation_lib
-        from llamavid.constants import DEFAULT_HISTORY_TOKEN, DEFAULT_IMAGE_TOKEN, DEFAULT_WP_TOKEN
+        from llamavid.constants import (
+            DEFAULT_HISTORY_TOKEN,
+            DEFAULT_IMAGE_TOKEN,
+            DEFAULT_WP_TOKEN,
+            WAYPOINT_LABEL_TOKEN,
+        )
         from llamavid.train.train_uav.train_uav_notice import preprocess
 
         self.preprocess = preprocess
         self.DEFAULT_HISTORY_TOKEN = DEFAULT_HISTORY_TOKEN
         self.DEFAULT_IMAGE_TOKEN = DEFAULT_IMAGE_TOKEN
         self.DEFAULT_WP_TOKEN = DEFAULT_WP_TOKEN
+        self.WAYPOINT_LABEL_TOKEN = WAYPOINT_LABEL_TOKEN
         if "imgsp_uav" in conversation_lib.conv_templates:
             conversation_lib.default_conversation = conversation_lib.conv_templates["imgsp_uav"]
 
@@ -201,6 +216,7 @@ class OpenUAVBackend(ModelBackend):
             "checkpoint": str(self.ckpt_dir),
             "device": self.device,
             "native_chunk_size": 1,
+            "action_frame": "body",
             "lora_loaded": self.has_lora,
             "checkpoint_keys_loaded": self.loaded_checkpoint_keys,
             "warning": warning,
@@ -247,6 +263,11 @@ class OpenUAVBackend(ModelBackend):
         processed = self.preprocess(sources, self.tokenizer, has_image=True, refine_prompt=False)
         input_ids = processed["input_ids"].to(self.device)
         labels = processed["labels"].to(self.device)
+        if not waypoint_label_present(labels, self.WAYPOINT_LABEL_TOKEN):
+            raise RuntimeError(
+                "OpenUAV training preprocess did not insert WAYPOINT_LABEL_TOKEN; "
+                "refusing to run an invalid waypoint inference path"
+            )
         attention_mask = input_ids.ne(self.tokenizer.pad_token_id)
         prompt_values = processed.get("prompt") or [instruction]
         prompts = [prompt_values]
@@ -275,6 +296,7 @@ class OpenUAVBackend(ModelBackend):
             "actions": [[float(delta[0]), float(delta[1]), float(delta[2]), d_yaw, stop]],
             "metadata": {
                 "model": self.name,
+                "action_frame": "body",
                 "native_waypoint": [float(x) for x in wp[:4]],
                 "lora_loaded": self.has_lora,
             },

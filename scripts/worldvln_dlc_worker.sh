@@ -92,6 +92,7 @@ PYTHONPATH="${UAVEVAL_ROOT}/src" \
   --upstream-url http://127.0.0.1:8001 \
   --timeout-s 1800 \
   --action-head-mode tsformer_latent \
+  --stop-speed-threshold "${WORLDVLN_STOP_SPEED_THRESHOLD_M:-0.5}" \
   --host 127.0.0.1 \
   --port 18104 >"${PROXY_LOG}" 2>&1 &
 proxy_pid=$!
