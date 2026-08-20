@@ -1,4 +1,4 @@
-extends: ../airbrain_http.yaml
+extends: ../http.yaml
 policy:
   type: http
   kwargs:

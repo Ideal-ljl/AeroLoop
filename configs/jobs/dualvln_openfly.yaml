@@ -1,0 +1,28 @@
+extends: ../models/dualvln.yaml
+
+benchmark:
+  source: openfly
+  kwargs:
+    path: configs/datasets/openfly_fixed_11x100_recovered.json
+    include_envs: env_airsim_18
+    limit: 100
+
+rollout:
+  max_steps: 200
+  execution_horizon: null
+  stop_threshold: 0.5
+  terminate_on_collision: true
+  execute_motion_on_stop: false
+
+metrics:
+  profile: openfly
+  require_stop_for_success: false
+
+output:
+  jsonl: eval_results/dualvln_openfly.jsonl
+  include_steps: true
+
+media:
+  show_window: false
+  save_video: false
+  save_collision_frame: true

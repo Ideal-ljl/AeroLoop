@@ -1,19 +1,21 @@
-# Extending UAVEval
+# Extending AeroLoop
 
 Extensions may be referenced by `module:Object` in YAML while developing. A
 reusable package should publish a Python entry point so users can select it by
-name without modifying UAVEval.
+name without modifying AeroLoop.
 
-## Environment
+## Simulator
 
-An environment owns rendering and simulator interaction. UAVEval owns the
-canonical action and rollout protocol.
+A simulator adapter owns rendering, physics, process lifecycle, sensors, and
+coordinate conversion. AeroLoop includes direct `airsim`, `gs_airsim`, and
+`unrealcv` adapters. Use an extension for another SDK or for scene-specific
+capabilities not covered by those generic adapters.
 
 ```python
-from uav_eval import EnvironmentAdapter, Observation
-from uav_eval.types import Transition
+from aeroloop import Observation, SimulatorAdapter
+from aeroloop.types import Transition
 
-class MyEnvironment(EnvironmentAdapter):
+class MySimulator(SimulatorAdapter):
     def __init__(self, env_name, cameras="front", **kwargs):
         self.env_name = env_name
 
@@ -36,9 +38,9 @@ class MyEnvironment(EnvironmentAdapter):
 ```
 
 ```yaml
-environment:
+simulator:
   type: custom
-  entrypoint: my_package.environment:MyEnvironment
+  entrypoint: my_package.simulator:MySimulator
   kwargs: {cameras: standard}
 ```
 
@@ -57,7 +59,7 @@ isolated dependencies, prefer the HTTP API.
 Custom metrics receive every executed transition and are namespaced in output.
 
 ```python
-from uav_eval import Metric
+from aeroloop import Metric
 
 class EnergyMetric(Metric):
     name = "energy"
@@ -95,16 +97,45 @@ benchmark:
   kwargs: {split: test}
 ```
 
+## Data collector / observer
+
+Observers receive the initial observation, every executed step, and the final
+result. They are the preferred place to save simulator-specific sensors,
+labels, telemetry, or dataset manifests without adding those dependencies to
+AeroLoop.
+
+```python
+from aeroloop import RolloutObserver
+
+class DatasetCollector(RolloutObserver):
+    def __init__(self, output_dir):
+        self.output_dir = output_dir
+
+    def on_step(self, episode, observation, record):
+        save_sample(self.output_dir, episode, observation, record)
+        return True
+```
+
+```yaml
+observers:
+  - entrypoint: my_package.collectors:DatasetCollector
+    kwargs: {output_dir: collected_data}
+```
+
 ## Package entry points
 
 ```toml
-[project.entry-points."uav_eval.environments"]
-my-simulator = "my_package.environment:MyEnvironment"
+[project.entry-points."aeroloop.simulators"]
+my-simulator = "my_package.simulator:MySimulator"
 
-[project.entry-points."uav_eval.metrics"]
+[project.entry-points."aeroloop.metrics"]
 energy = "my_package.metrics:EnergyMetric"
+
+[project.entry-points."aeroloop.observers"]
+dataset = "my_package.collectors:DatasetCollector"
 ```
 
 Then use `type: my-simulator` or `type: energy`. Policy and episode-source
-groups follow the same pattern. Test extensions against the public protocols
-and include at least one deterministic fixture.
+groups follow the same pattern. The old `EnvironmentAdapter`, `environment:`
+config key, and `aeroloop.environments` group remain compatibility aliases.
+Test extensions against the public protocols and include a deterministic fixture.

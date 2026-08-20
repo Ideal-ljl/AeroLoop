@@ -1,0 +1,10 @@
+# Run inside the model's own conda environment:
+# aeroloop-model-server function --config configs/models/function.yaml --port 18080
+function:
+  entrypoint: my_model.inference:predict
+  inputs:
+    instruction: instruction
+    image: images.front
+    state: state
+  static_kwargs: {}
+  actions_key: actions

@@ -1,9 +1,9 @@
 # Model HTTP servers
 
-Install UAVEval into every model environment first:
+Install AeroLoop into every model environment first:
 
 ```bash
-cd /mnt/petrelfs/youzhongrui/v2/UAVEval
+cd /path/to/AeroLoop
 python -m pip install -e . --no-deps
 ```
 
@@ -16,7 +16,7 @@ Every server exposes:
 The HTTP contract, error handling, and WorldVLN cache/unit conversion are
 covered by automated tests. GPU loading must still be smoke-tested inside each
 model's own environment; those dependencies are deliberately not installed in
-the lightweight UAVEval environment.
+the lightweight AeroLoop environment.
 
 The launch scripts accept `PYTHON_BIN`, path, host, port, device, and model
 settings through environment variables.
@@ -40,16 +40,16 @@ PYTHON_BIN=/path/to/llamauav/bin/python bash scripts/serve_openuav.sh
 curl http://127.0.0.1:18102/health
 ```
 
-The adapter follows the original waypoint-forward path, but loads the 32,000
-token Vicuna base before expanding it with `<wp>` and `<his>`. It also removes
-PEFT wrapper prefixes from exported weights. The server validates the waypoint,
-history, and added-token weights before allocating the base model and refuses
-to start with randomly initialized navigation heads.
+The adapter follows the complete OpenUAV path: the LLM predicts native
+`[unit_xyz,norm]`, then the trajectory-completion checkpoint refines the target
+into seven cumulative body-frame points. The server differences those points
+into canonical action deltas. A near-zero LLM norm produces one explicit stop
+action and bypasses the refiner.
 
-The currently bundled `ckpt/OpenUAV/final/mm_projector.bin` contains only the
-vision projector and Q-Former. It does **not** contain the trained waypoint,
-history, or added-token weights, and has no LoRA adapter, so it is intentionally
-rejected. Point `OPENUAV_CKPT` at a complete export before starting this server.
+The loader expands the 32,000-token Vicuna base with `<wp>` and `<his>`, removes
+PEFT wrapper prefixes, and validates both navigation-head and trajectory-head
+weights. `OPENUAV_CKPT` is the directory containing `final/`, `model_zoo/`, and
+normally `model_2.pth`; use `OPENUAV_TRAJ_CKPT` to override the latter.
 
 ## DualVLN
 
@@ -63,6 +63,27 @@ cumulative 32-point body-frame trajectory, so the server differences it into
 32 per-step translations before returning the canonical chunk. The bundled
 stage-2 directory has no `preprocessor_config.json`; the adapter intentionally
 uses the matching stage-1 Qwen image processor with the stage-2 tokenizer.
+
+## OmniNav
+
+```bash
+PYTHON_BIN=/path/to/compatible/python bash scripts/serve_omninav.sh
+curl http://127.0.0.1:18105/health
+```
+
+The adapter targets the OpenFly-trained 3-D OmniNav checkpoint. It reproduces
+the training input exactly: five uniformly sampled historical front-camera
+frames and body-frame positions, followed by the current front view. The model
+returns five cumulative body-frame XYZ waypoints and five arrive logits. The
+server differences the waypoints into canonical action deltas, derives yaw
+from XY translation, and applies sigmoid to each arrive logit.
+
+OmniNav must import the modified Transformers source bundled under
+`train_code/transformers-main`; use an environment with Torch, Accelerate,
+Pillow, and `tokenizers>=0.21,<0.22`. On the current workspace,
+`internnav-infer` is compatible. The default checkpoint is
+`OmniNav/checkpoint-19805`, and both paths can be overridden with
+`OMNINAV_ROOT` and `OMNINAV_CKPT`.
 
 ## WorldVLN
 
@@ -88,23 +109,29 @@ curl http://127.0.0.1:18104/health
 ```
 
 WorldVLN predicts a complete native segment. The proxy returns one cached
-action per UAVEval call while collecting real frames, then asks the upstream
+action per AeroLoop call while collecting real frames, then asks the upstream
 server for the next segment. `metadata.native_replan` distinguishes a real
 WorldVLN replan from a cached action. Upstream cm/degree actions are converted
 to metres/radians.
 
-## Benchmark configuration
+## Evaluation configuration
 
-The files under `configs/models/` inherit the common AirBrain configuration and
-can be run directly after editing dataset paths. The primary benchmark may retain
-`execution_horizon: 1`; the WorldVLN proxy will still disclose its intrinsic
-segment-level open-loop behavior in metadata.
+The files under `configs/models/` inherit the generic HTTP template. Combine
+one of them with a built-in simulator config or replace the simulator and
+episode source with extensions from your integration package. AeroLoop ships
+generic AirSim, GS-AirSim, and UnrealCV adapters but does not distribute scene
+executables.
 
-DualVLN and OpenUAV predict local XYZ trajectories without a separate yaw
-channel. Their adapters derive `d_yaw=atan2(dy,dx)`, matching AirBrain's
-trajectory-heading update. AerialVLA and WorldVLN retain their native explicit
-yaw predictions.
+The primary benchmark may retain `execution_horizon: 1`; the WorldVLN proxy
+will still disclose its intrinsic segment-level open-loop behavior in metadata.
+
+DualVLN, OpenUAV, and OmniNav predict local XYZ trajectories without a separate yaw
+channel. Their adapters derive `d_yaw=atan2(dy,dx)` in the canonical body
+frame. AerialVLA and WorldVLN retain their native explicit yaw predictions.
 
 ```bash
-uav-eval run --config configs/models/aerialvla.yaml
+aeroloop run --config configs/models/aerialvla.yaml
 ```
+
+The command becomes runnable after the two integration entry points in
+`configs/http.yaml` are replaced.

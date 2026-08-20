@@ -1,0 +1,33 @@
+# Replace these entry points with implementations from your simulator package.
+benchmark:
+  source: custom
+  entrypoint: your_package.dataset:load_episodes
+  kwargs: {}
+simulator:
+  type: custom
+  entrypoint: your_package.simulator:Simulator
+  kwargs:
+    cameras: standard
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18080/v1/predict
+    reset_url: http://127.0.0.1:18080/v1/reset
+    timeout_s: 120
+    views: [front]
+rollout:
+  max_steps: 200
+  execution_horizon: 1
+  stop_threshold: 0.5
+  terminate_on_collision: true
+metrics:
+  success_distance: 25
+  distance_mode: endpoint_3d
+  require_stop_for_success: false
+output:
+  jsonl: eval_results/http.jsonl
+  include_steps: true
+media:
+  show_window: false
+  save_video: false
+  save_collision_frame: false

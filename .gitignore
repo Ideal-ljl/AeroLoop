@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 .runtime/
+# Large local simulator executables live under .runtime/envs and must never be packaged.
 build/
 dist/
 eval_results/

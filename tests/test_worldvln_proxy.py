@@ -3,8 +3,8 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from uav_eval.server.base import PredictRequest
-from uav_eval.server.backends.worldvln import WorldVLNProxyBackend
+from aeroloop.server.base import PredictRequest
+from aeroloop.server.backends.worldvln import WorldVLNProxyBackend
 
 
 class UpstreamHandler(BaseHTTPRequestHandler):

@@ -1,8 +1,8 @@
 import math
 import unittest
 
-from uav_eval.geometry import apply_body_action, relative_state
-from uav_eval.types import CanonicalAction, Pose
+from aeroloop.geometry import apply_body_action, relative_state
+from aeroloop.types import CanonicalAction, Pose
 
 
 class GeometryTest(unittest.TestCase):

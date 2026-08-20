@@ -1,0 +1,10 @@
+benchmark:
+  source: openfly
+  kwargs:
+    path: /datasets/openfly/test_data.json
+    dataset_root: /datasets/openfly
+    path_rewrites:
+      /old/machine/openfly: /datasets/openfly
+
+metrics:
+  profile: openfly

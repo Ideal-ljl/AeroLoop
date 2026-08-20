@@ -1,0 +1,12 @@
+simulator:
+  type: gs_airsim
+  kwargs:
+    env_root: .runtime/envs/gs_airsim
+    launch_script: gs.sh
+    host: 127.0.0.1
+    port: 41451
+    cameras: [front]
+    camera_names:
+      front: front_custom
+    configure_camera_poses: false
+    log_path: eval_results/gs_simulator.log

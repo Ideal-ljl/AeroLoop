@@ -1,6 +1,6 @@
 import unittest
 
-from uav_eval.media import MediaConfig, _safe_name
+from aeroloop.media import MediaConfig, _safe_name
 
 
 class MediaConfigTest(unittest.TestCase):

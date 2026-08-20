@@ -1,0 +1,46 @@
+# Template for connecting an external simulator integration to an HTTP model.
+# Replace both entry points with implementations from your integration package.
+benchmark:
+  source: custom
+  entrypoint: your_package.dataset:load_episodes
+  kwargs: {}
+
+simulator:
+  type: custom
+  entrypoint: your_package.simulator:Simulator
+  kwargs:
+    cameras: standard
+
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18080/v1/predict
+    reset_url: http://127.0.0.1:18080/v1/reset
+    timeout_s: 120
+    views: [front]
+    observation_fields: [images, state]
+    state_source: relative
+    image_size: [224, 224]
+
+rollout:
+  max_steps: 200
+  execution_horizon: 1
+  stop_threshold: 0.5
+  terminate_on_collision: true
+
+metrics:
+  profile: standard
+  success_distance: 25
+  distance_mode: endpoint_3d
+  require_stop_for_success: false
+
+output:
+  jsonl: eval_results/http.jsonl
+  include_steps: true
+
+media:
+  show_window: false
+  save_video: true
+  video_dir: eval_results/videos
+  save_collision_frame: true
+  collision_dir: eval_results/collisions

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AB_EX_ROOT="${AB_EX_ROOT:-/home/liujunli/ceph/liujunli/Ab_ex}"
+AB_EX_ROOT="${AB_EX_ROOT:-${HOME}/uav-models}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
-exec "${PYTHON_BIN}" -m uav_eval.server_cli dualvln \
+exec "${PYTHON_BIN}" -m aeroloop.server_cli dualvln \
   --repo-root "${DUALVLN_ROOT:-${AB_EX_ROOT}/DualVLN}" \
   --ckpt-dir "${DUALVLN_CKPT:-${AB_EX_ROOT}/ckpt/DualVLN}" \
   --device "${DEVICE:-cuda}" \

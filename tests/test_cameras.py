@@ -1,10 +1,9 @@
 import math
 import unittest
 
-from uav_eval.cameras import CameraSpec, resolve_cameras
-from uav_eval.envs.airbrain import AirBrainEnvironment
-from uav_eval.envs.mock import MockEnvironment
-from uav_eval.types import EpisodeSpec, Observation, Pose
+from aeroloop.cameras import resolve_cameras
+from aeroloop.simulators.mock import MockSimulator
+from aeroloop.types import EpisodeSpec, Observation, Pose
 
 
 class CameraTest(unittest.TestCase):
@@ -30,35 +29,13 @@ class CameraTest(unittest.TestCase):
         self.assertIs(observation.rgb, down)
 
     def test_mock_environment_can_render_configured_views(self):
-        environment = MockEnvironment(
+        environment = MockSimulator(
             cameras=["front", "down"], image_factory=lambda camera, pose, step: f"{camera.name}:{step}"
         )
         episode = EpisodeSpec("ep", "mock", "go", Pose(0, 0, 0, 0), (1, 0, 0), 1)
         observation = environment.reset(episode)
         self.assertEqual(observation.images, {"front": "front:0", "down": "down:0"})
         self.assertEqual(observation.rgb, "front:0")
-
-    def test_airbrain_applies_body_relative_camera_pose(self):
-        calls = []
-
-        class Bridge:
-            def set_camera_pose(self, *values):
-                calls.append(values)
-
-        environment = AirBrainEnvironment.__new__(AirBrainEnvironment)
-        environment.pose = Pose(10, 20, 30, math.pi / 2)
-        environment.episode = type("Episode", (), {"metadata": {"pitch": -10}})()
-        environment.pos_ratio = 2.0
-        environment._bridge = Bridge()
-        environment.settle_seconds = 0
-        environment._set_pose(CameraSpec("offset", position=(2, 0, 4), yaw=math.pi / 2, pitch=-math.pi / 4))
-        x, y, z, pitch, yaw, roll = calls[0]
-        self.assertAlmostEqual(x, 5)
-        self.assertAlmostEqual(y, 11)
-        self.assertAlmostEqual(z, 17)
-        self.assertAlmostEqual(pitch, -55)
-        self.assertAlmostEqual(yaw, 180)
-        self.assertAlmostEqual(roll, 0)
 
 
 if __name__ == "__main__":

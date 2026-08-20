@@ -1,0 +1,20 @@
+simulator:
+  type: unrealcv
+  kwargs:
+    env_root: .runtime/envs/ue
+    launch_script: CitySample.sh
+    host: 127.0.0.1
+    port: 9000
+    update_ini_port: true
+    spawn_cameras: true
+    # Large packaged scenes keep initializing after the socket starts listening.
+    startup_grace_s: 20
+    cameras:
+      - name: front
+        width: 896
+        height: 896
+    camera_ids:
+      front: 1
+    # Set this only when the packaged scene exposes a collision query command.
+    collision_query: null
+    log_path: eval_results/unrealcv_simulator.log

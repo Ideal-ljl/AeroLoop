@@ -4,12 +4,17 @@ Every model service exposes `GET /health`, `POST /v1/reset`, and
 `POST /v1/predict`. A model service converts its native inputs and outputs; the
 benchmark runner never imports the model package.
 
+This boundary deliberately allows the simulator/runner and model to use
+different Python and Conda environments. They only need compatible protocol
+versions and network access; CUDA, PyTorch, simulator SDK, and model
+dependencies do not cross the boundary.
+
 ## Reset
 
 ```json
 {
-  "episode_id": "env:episode",
-  "env_name": "env_airsim_18",
+  "episode_id": "scene:episode",
+  "env_name": "custom-simulator",
   "instruction": "fly toward the tower"
 }
 ```
@@ -18,8 +23,8 @@ benchmark runner never imports the model package.
 
 ```json
 {
-  "episode_id": "env:episode",
-  "env_name": "env_airsim_18",
+  "episode_id": "scene:episode",
+  "env_name": "custom-simulator",
   "instruction": "fly toward the tower",
   "step": 0,
   "state": [0.0, 0.0, 0.0, 0.0],
@@ -65,3 +70,31 @@ The response contains one or more canonical actions:
 
 Rows must contain finite numeric values. Four-column rows
 `[dx,dy,dz,stop]` are accepted and imply `d_yaw=0`.
+
+## Payload selection and inference-function wrapper
+
+```yaml
+policy:
+  type: http
+  kwargs:
+    views: [front]
+    observation_fields: [images, state]
+    state_source: relative
+    image_size: [224, 224]
+    view_sizes:
+      down: [320, 240]
+```
+
+Available fields are `images`, `state` (start-frame-relative), `pose` (world
+frame), `auxiliary_state`, and `camera_specs`. Episode identity, instruction,
+environment name, and step index are always sent.
+
+`state_source` may be `relative`, `world`, or an integration-provided selector
+such as `auxiliary.body_state` or `auxiliary.ned_state`. Canonical actions are
+always body-frame translations; simulator integrations own conversion to their
+native ENU/NED/world coordinates.
+
+`aeroloop-model-server function` maps arbitrary inference-function argument names
+to selectors such as `instruction`, `state`, `pose`,
+`auxiliary_state.velocity`, `image`, or `images.down`. The function returns an
+action list or an object containing `actions` and optional `metadata`.

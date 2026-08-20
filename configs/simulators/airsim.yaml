@@ -1,0 +1,20 @@
+simulator:
+  type: airsim
+  kwargs:
+    env_root: .runtime/envs/airsim
+    launch_script: LinuxNoEditor/start.sh
+    host: 127.0.0.1
+    port: 41451
+    cameras:
+      - name: front
+        width: 896
+        height: 896
+        fov: 90
+    camera_names:
+      front: front_custom
+    # Keep the camera extrinsics already packaged in settings.json.
+    configure_camera_poses: false
+    position_sign: [1, -1, -1]
+    yaw_sign: -1
+    ignore_collision: false
+    log_path: eval_results/simulator.log

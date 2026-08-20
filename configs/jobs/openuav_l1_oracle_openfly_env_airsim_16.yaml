@@ -1,0 +1,67 @@
+benchmark:
+  source: openfly
+  kwargs:
+    path: configs/datasets/openfly_fixed_11x100_recovered.json
+    include_envs: env_airsim_16
+    limit: 100
+
+simulator:
+  type: airsim
+  kwargs:
+    env_root: .runtime/envs/airsim
+    launch_script: LinuxNoEditor/start.sh
+    host: 127.0.0.1
+    port: 41451
+    cameras:
+      - name: front
+        width: 896
+        height: 896
+        fov: 90
+    camera_names:
+      front: front_custom
+    vehicle_name: drone_1
+    configure_camera_poses: false
+    strict_camera_size: true
+    capture_depth: false
+    position_sign: [1, -1, -1]
+    yaw_sign: -1
+    channel_order: bgr
+    ignore_collision: false
+    log_path: simulator.log
+
+policy:
+  type: l1_oracle
+  kwargs:
+    trajectory_metadata_key: trajectory
+    base:
+      type: http
+      kwargs:
+        url: http://127.0.0.1:18102/v1/predict
+        reset_url: http://127.0.0.1:18102/v1/reset
+        timeout_s: 180
+        views: [front]
+        observation_fields: [images, state]
+        state_source: relative
+        image_size: [224, 224]
+
+rollout:
+  max_steps: 200
+  execution_horizon: null
+  stop_threshold: 0.5
+  terminate_on_collision: true
+  terminate_on_success: true
+  execute_motion_on_stop: false
+
+metrics:
+  profile: openfly
+  require_stop_for_success: false
+
+output:
+  jsonl: eval_results/openuav_l1_oracle_openfly_env_airsim_16.jsonl
+  include_steps: true
+
+media:
+  show_window: false
+  save_video: false
+  save_collision_frame: true
+  collision_dir: eval_results/collisions/openuav_l1_oracle_openfly_env_airsim_16

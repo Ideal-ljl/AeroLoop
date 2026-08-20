@@ -1,0 +1,17 @@
+extends: ../http.yaml
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18105/v1/predict
+    reset_url: http://127.0.0.1:18105/v1/reset
+    timeout_s: 180
+    views: [front]
+    observation_fields: [images, state]
+    state_source: relative
+rollout:
+  execution_horizon: 1
+output:
+  jsonl: eval_results/omninav.jsonl
+media:
+  video_dir: eval_results/videos/omninav
+  collision_dir: eval_results/collisions/omninav

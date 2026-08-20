@@ -1,10 +1,10 @@
 import unittest
 
-from uav_eval.envs.mock import MockEnvironment
-from uav_eval.metrics import Metric, MetricConfig, aggregate_results
-from uav_eval.policies.mock import MockPolicy
-from uav_eval.runner import RolloutConfig, RolloutRunner
-from uav_eval.types import EpisodeSpec, Pose, TerminationReason
+from aeroloop.simulators.mock import MockSimulator
+from aeroloop.metrics import Metric, MetricConfig, aggregate_results
+from aeroloop.policies.mock import MockPolicy
+from aeroloop.runner import RolloutConfig, RolloutRunner
+from aeroloop.types import EpisodeSpec, Pose, TerminationReason
 
 
 def episode(target_x=2.0):
@@ -19,10 +19,15 @@ def episode(target_x=2.0):
 
 
 class RunnerTest(unittest.TestCase):
+    def test_legacy_environment_keyword_remains_supported(self):
+        runner = RolloutRunner(environment=MockSimulator(), policy=MockPolicy(), rollout=RolloutConfig(max_steps=1))
+        result = runner.run_episode(episode())
+        self.assertEqual(result.metrics["steps_taken"], 1)
+
     def test_replan_every_step_and_explicit_stop(self):
         policy = MockPolicy(action=(1, 0, 0, 0, 0), chunk_size=4, stop_after=2)
         runner = RolloutRunner(
-            MockEnvironment(),
+            MockSimulator(),
             policy,
             RolloutConfig(max_steps=10, execution_horizon=1),
             MetricConfig(success_distance=0.1, distance_mode="endpoint_3d", require_stop_for_success=True),
@@ -36,21 +41,33 @@ class RunnerTest(unittest.TestCase):
 
     def test_native_chunk_only_calls_policy_once(self):
         policy = MockPolicy(action=(1, 0, 0, 0, 0), chunk_size=4)
-        result = RolloutRunner(
-            MockEnvironment(), policy, RolloutConfig(max_steps=4, execution_horizon=None)
-        ).run_episode(episode(target_x=4))
+        result = RolloutRunner(MockSimulator(), policy, RolloutConfig(max_steps=4, execution_horizon=None)).run_episode(
+            episode(target_x=4)
+        )
         self.assertEqual(result.metrics["inference_calls"], 1)
         self.assertEqual(result.termination_reason, TerminationReason.MAX_STEPS)
 
     def test_collision_terminates(self):
         result = RolloutRunner(
-            MockEnvironment(collision_x=2),
+            MockSimulator(collision_x=2),
             MockPolicy(action=(1, 0, 0, 0, 0)),
             RolloutConfig(max_steps=10, terminate_on_collision=True),
         ).run_episode(episode(target_x=10))
         self.assertEqual(result.termination_reason, TerminationReason.COLLISION)
         self.assertEqual(result.metrics["steps_taken"], 2)
         self.assertTrue(result.metrics["collision"])
+
+    def test_gt_goal_distance_can_terminate_without_policy_stop(self):
+        result = RolloutRunner(
+            MockSimulator(),
+            MockPolicy(action=(1, 0, 0, 0, 0), chunk_size=4),
+            RolloutConfig(max_steps=10, execution_horizon=None, terminate_on_success=True),
+            MetricConfig(success_distance=0.1, distance_mode="endpoint_3d", require_stop_for_success=False),
+        ).run_episode(episode(target_x=2))
+        self.assertEqual(result.termination_reason, TerminationReason.SUCCESS)
+        self.assertEqual(result.metrics["success"], 1)
+        self.assertEqual(result.metrics["steps_taken"], 2)
+        self.assertFalse(result.metrics["stop_called"])
 
     def test_custom_metric_is_namespaced(self):
         class MotionMetric(Metric):
@@ -66,7 +83,7 @@ class RunnerTest(unittest.TestCase):
                 return {"effort": self.total, "steps": step_count}
 
         result = RolloutRunner(
-            MockEnvironment(),
+            MockSimulator(),
             MockPolicy(action=(1, 0, 0, 0, 0)),
             RolloutConfig(max_steps=2),
             custom_metrics=[MotionMetric()],
@@ -85,7 +102,7 @@ class RunnerTest(unittest.TestCase):
                 raise RuntimeError("broken fixture")
 
         result = RolloutRunner(
-            MockEnvironment(), MockPolicy(), RolloutConfig(max_steps=1), custom_metrics=[BrokenMetric()]
+            MockSimulator(), MockPolicy(), RolloutConfig(max_steps=1), custom_metrics=[BrokenMetric()]
         ).run_episode(episode())
         self.assertEqual(result.termination_reason, TerminationReason.ERROR)
         self.assertIn("metric finalize failed", result.error)

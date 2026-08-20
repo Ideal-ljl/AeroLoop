@@ -1,0 +1,9 @@
+benchmark:
+  source: traveluav
+  kwargs:
+    path: /datasets/TravelUAV/data/uav_dataset/unseen_valset.json
+    dataset_root: /datasets/TravelUAV/dataset
+    deduplicate: true
+
+metrics:
+  profile: traveluav

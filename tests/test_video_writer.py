@@ -5,12 +5,12 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from uav_eval.media import FFmpegVideoWriter
-from uav_eval.envs.mock import MockEnvironment
-from uav_eval.media import MediaConfig, MediaObserver
-from uav_eval.policies.mock import MockPolicy
-from uav_eval.runner import RolloutConfig, RolloutRunner
-from uav_eval.types import EpisodeSpec, Pose
+from aeroloop.media import FFmpegVideoWriter
+from aeroloop.simulators.mock import MockSimulator
+from aeroloop.media import MediaConfig, MediaObserver
+from aeroloop.policies.mock import MockPolicy
+from aeroloop.runner import RolloutConfig, RolloutRunner
+from aeroloop.types import EpisodeSpec, Pose
 
 
 @unittest.skipUnless(
@@ -37,7 +37,7 @@ class VideoWriterTest(unittest.TestCase):
     def test_media_observer_records_episode_artifact(self):
         import numpy as np
 
-        class ImageEnvironment(MockEnvironment):
+        class ImageSimulator(MockSimulator):
             def _observation(self):
                 return replace(super()._observation(), rgb=np.full((64, 96, 3), 80, dtype=np.uint8))
 
@@ -47,7 +47,7 @@ class VideoWriterTest(unittest.TestCase):
             )
             episode = EpisodeSpec("video-ep", "mock", "go", Pose(0, 0, 0, 0), (2, 0, 0), 2)
             result = RolloutRunner(
-                ImageEnvironment(),
+                ImageSimulator(),
                 MockPolicy(action=(1, 0, 0, 0, 0)),
                 RolloutConfig(max_steps=2),
                 observers=[observer],

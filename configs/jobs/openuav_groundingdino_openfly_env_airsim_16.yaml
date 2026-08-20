@@ -1,0 +1,84 @@
+benchmark:
+  source: openfly
+  kwargs:
+    path: configs/datasets/openfly_fixed_11x100_recovered.json
+    include_envs: env_airsim_16
+    limit: 100
+
+simulator:
+  type: airsim
+  kwargs:
+    env_root: .runtime/envs/airsim
+    launch_script: LinuxNoEditor/start.sh
+    host: 127.0.0.1
+    port: 41451
+    cameras:
+      - name: front
+        width: 896
+        height: 896
+        fov: 90
+    camera_names:
+      front: front_custom
+    vehicle_name: drone_1
+    configure_camera_poses: false
+    strict_camera_size: true
+    capture_depth: true
+    depth_image_type: DepthPlanar
+    position_sign: [1, -1, -1]
+    yaw_sign: -1
+    channel_order: bgr
+    ignore_collision: false
+    log_path: simulator.log
+
+policy:
+  type: groundingdino_stop
+  kwargs:
+    base:
+      type: l1_oracle
+      kwargs:
+        trajectory_metadata_key: trajectory
+        base:
+          type: http
+          kwargs:
+            url: http://127.0.0.1:18102/v1/predict
+            reset_url: http://127.0.0.1:18102/v1/reset
+            timeout_s: 180
+            views: [front]
+            observation_fields: [images, state]
+            state_source: relative
+            image_size: [224, 224]
+    detector_config:
+      implementation: transformers
+      model_path: /mnt/petrelfs/youzhongrui/v2/Ab_ex/grounding-dino-base
+      device: cuda:0
+      box_threshold: 0.6
+      text_threshold: 0.4
+      max_depth: 18.0
+      max_box_width_ratio: 0.6
+      max_box_height_ratio: 0.5
+    views: [front]
+    prompt_metadata_key: grounding_prompt
+    fallback_to_instruction: false
+    min_step: 1
+    reuse_base_chunk: true
+
+rollout:
+  max_steps: 200
+  execution_horizon: 1
+  stop_threshold: 0.5
+  terminate_on_collision: true
+  execute_motion_on_stop: false
+
+metrics:
+  profile: openfly
+  require_stop_for_success: false
+
+output:
+  jsonl: eval_results/openuav_groundingdino_openfly_env_airsim_16.jsonl
+  include_steps: true
+
+media:
+  show_window: false
+  save_video: false
+  save_collision_frame: true
+  collision_dir: eval_results/collisions/openuav_groundingdino_openfly_env_airsim_16

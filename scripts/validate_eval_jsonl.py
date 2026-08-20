@@ -5,7 +5,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
+
+
+def _is_explicit_aerialvla_zero_action(step: dict) -> bool:
+    """Return true when AerialVLA explicitly emitted its valid zero command.
+
+    ``0 49 49`` dequantizes to forward=0, down=0 and yaw=0 for the
+    repository's 99-bin codec.  A policy can genuinely get stuck emitting
+    that command; it is a model failure that must remain in the benchmark,
+    not an inference/infrastructure failure.  Requiring the strict raw text
+    prevents malformed-output fallbacks from being accepted as legitimate.
+    """
+    metadata = step.get("policy_metadata") or {}
+    if metadata.get("model") != "aerialvla":
+        return False
+    raw_output = metadata.get("raw_output")
+    if not isinstance(raw_output, str):
+        return False
+    action_text = raw_output.rsplit("Action:", 1)[-1].split("</s>", 1)[0].strip()
+    if re.fullmatch(r"0\s+49\s+49", action_text) is None:
+        return False
+    native = metadata.get("native_action") or []
+    return len(native) >= 4 and all(abs(float(value)) <= 1e-8 for value in native[:3]) and not bool(native[3])
 
 
 def main() -> None:
@@ -27,7 +50,11 @@ def main() -> None:
         steps = row.get("steps") or []
         if steps and not row.get("stop_called"):
             actions = [step.get("action") or [] for step in steps]
-            if actions and all(not any(abs(float(value)) > 1e-8 for value in action[:4]) for action in actions):
+            all_zero = actions and all(
+                not any(abs(float(value)) > 1e-8 for value in action[:4]) for action in actions
+            )
+            explicit_policy_zero = all(_is_explicit_aerialvla_zero_action(step) for step in steps)
+            if all_zero and not explicit_policy_zero:
                 degenerate.append(row)
     if len(episodes) != args.expected or errors or degenerate:
         examples = [f"{row.get('episode_id')}: {row.get('error')}" for row in errors[:3]]

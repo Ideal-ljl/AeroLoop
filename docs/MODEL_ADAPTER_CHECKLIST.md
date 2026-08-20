@@ -15,3 +15,4 @@ test all of the following:
 9. Peak GPU memory and inference latency after warmup.
 10. Both `execution_horizon=1` and native-chunk smoke runs.
 11. Behavior when a required view or auxiliary state field is unavailable.
+12. No simulator package imports or simulator-specific coordinate assumptions.

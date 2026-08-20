@@ -1,10 +1,10 @@
 import unittest
 
-from uav_eval.envs.mock import MockEnvironment
-from uav_eval.observers import RolloutObserver
-from uav_eval.policies.mock import MockPolicy
-from uav_eval.runner import RolloutConfig, RolloutRunner
-from uav_eval.types import EpisodeSpec, Pose, TerminationReason
+from aeroloop.simulators.mock import MockSimulator
+from aeroloop.observers import RolloutObserver
+from aeroloop.policies.mock import MockPolicy
+from aeroloop.runner import RolloutConfig, RolloutRunner
+from aeroloop.types import EpisodeSpec, Pose, TerminationReason
 
 
 class SpyObserver(RolloutObserver):
@@ -33,7 +33,7 @@ class ObserverTest(unittest.TestCase):
         observer = SpyObserver()
         episode = EpisodeSpec("ep", "mock", "go", Pose(0, 0, 0, 0), (2, 0, 0), 2)
         result = RolloutRunner(
-            MockEnvironment(),
+            MockSimulator(),
             MockPolicy(action=(1, 0, 0, 0, 0)),
             RolloutConfig(max_steps=2),
             observers=[observer],
@@ -45,7 +45,7 @@ class ObserverTest(unittest.TestCase):
         observer = SpyObserver(abort_after=1)
         episode = EpisodeSpec("ep", "mock", "go", Pose(0, 0, 0, 0), (10, 0, 0), 10)
         result = RolloutRunner(
-            MockEnvironment(), MockPolicy(), RolloutConfig(max_steps=10), observers=[observer]
+            MockSimulator(), MockPolicy(), RolloutConfig(max_steps=10), observers=[observer]
         ).run_episode(episode)
         self.assertEqual(result.termination_reason, TerminationReason.USER_ABORT)
         self.assertEqual(result.metrics["steps_taken"], 1)

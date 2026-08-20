@@ -1,0 +1,23 @@
+extends: ../http.yaml
+
+policy:
+  type: http
+  kwargs:
+    url: http://127.0.0.1:18106/v1/predict
+    reset_url: http://127.0.0.1:18106/v1/reset
+    timeout_s: 180
+    image_size: null
+    views: [front]
+    observation_fields: [images, state]
+    state_source: relative
+
+rollout:
+  execution_horizon: 10
+  stop_threshold: 0.5
+
+output:
+  jsonl: eval_results/pi0.jsonl
+
+media:
+  video_dir: eval_results/videos/pi0
+  collision_dir: eval_results/collisions/pi0

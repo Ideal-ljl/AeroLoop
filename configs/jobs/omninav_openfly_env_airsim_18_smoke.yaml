@@ -1,0 +1,14 @@
+extends: omninav_openfly_env_airsim_18.yaml
+
+benchmark:
+  kwargs:
+    limit: 1
+
+rollout:
+  max_steps: 3
+
+output:
+  jsonl: eval_results/omninav_openfly_env_airsim_18_smoke.jsonl
+
+media:
+  save_collision_frame: false
